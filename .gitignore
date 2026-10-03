@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# build / cache
+.next/
+out/
+build/
+coverage/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# test
+playwright-report/
+test-results/
+
+# secrets (giữ lại .env.example)
+.env
+.env.*
+!.env.example
+
+# supabase local
+supabase/.branches/
+supabase/.temp/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
