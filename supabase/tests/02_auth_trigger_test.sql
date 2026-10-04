@@ -43,25 +43,25 @@ select is(
 );
 
 -- Test kiểm chứng trigger handle_new_user hoạt động độc lập ngay cả khi phiên gọi chỉ có search_path = public
+-- Đặt set local VÀ INSERT ra ngoài scalar subquery; chỉ để SELECT expression bên trong is(...)
+set local search_path = public;
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '88888888-8888-8888-8888-888888888888',
+  'authenticated',
+  'authenticated',
+  'test_trigger2@example.com',
+  '',
+  now(),
+  '{"full_name": "Cloud User 2"}'::jsonb,
+  now(),
+  now()
+);
+set local search_path = 'public,extensions';
 select is(
-  (
-    set local search_path = public;
-    insert into auth.users (
-      instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at
-    ) values (
-      '00000000-0000-0000-0000-000000000000',
-      '88888888-8888-8888-8888-888888888888',
-      'authenticated',
-      'authenticated',
-      'test_trigger2@example.com',
-      '',
-      now(),
-      '{"full_name": "Cloud User 2"}'::jsonb,
-      now(),
-      now()
-    );
-    select count(*)::int from public.profiles where id = '88888888-8888-8888-8888-888888888888';
-  ),
+  (select count(*)::int from public.profiles where id = '88888888-8888-8888-8888-888888888888'),
   1,
   'T4 (M2 Cloud search_path): handle_new_user kích hoạt thành công khi phiên chỉ có search_path = public'
 );

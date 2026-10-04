@@ -141,58 +141,56 @@ select throws_ok(
 -- ==============================================================================
 -- KIỂM CHỨNG TÍNH ĐỘC LẬP SEARCH_PATH (MÔ PHỎNG SUPABASE CLOUD PHIÊN GỌI CHỈ CÓ PUBLIC)
 -- Chứng minh các hàm trong public chạy đúng ngay cả khi search_path của phiên là chỉ 'public'
+-- set local chỉ áp dụng trong transaction hiện tại; pgTAP tự quản lý transaction.
+-- Đặt set local NGOÀI scalar subquery (trong subquery chỉ được dùng SELECT expression).
+-- Sau mỗi nhóm kiểm chứng, phục hồi search_path = 'public,extensions' để pgTAP dùng được.
 -- ==============================================================================
 set local role postgres;
 
 -- 1. f_unaccent độc lập search_path
+set local search_path = public;
 select is(
-  (
-    set local search_path = public;
-    select public.f_unaccent('Phở Bò Hà Nội')
-  ),
+  (select public.f_unaccent('Phở Bò Hà Nội')),
   'Pho Bo Ha Noi',
   'T10 (Cloud search_path): f_unaccent chạy thành công khi search_path = public'
 );
+set local search_path = 'public,extensions';
 
 -- 2. search_restaurants độc lập search_path (dùng trigram / unaccent trong extensions)
+set local search_path = public;
 select is(
-  (
-    set local search_path = public;
-    select count(*)::int from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444'
-  ),
+  (select count(*)::int from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444'),
   1,
   'T11 (Cloud search_path): search_restaurants chạy thành công khi search_path = public'
 );
+set local search_path = 'public,extensions';
 
 -- 3. restaurants_in_bounds độc lập search_path (dùng PostGIS st_* trong extensions)
+set local search_path = public;
 select is(
-  (
-    set local search_path = public;
-    select count(*)::int from public.restaurants_in_bounds(20.9, 105.7, 21.1, 105.9) where id = 'dddd4444-4444-4444-4444-444444444444'
-  ),
+  (select count(*)::int from public.restaurants_in_bounds(20.9, 105.7, 21.1, 105.9) where id = 'dddd4444-4444-4444-4444-444444444444'),
   1,
   'T12 (Cloud search_path): restaurants_in_bounds chạy thành công khi search_path = public'
 );
+set local search_path = 'public,extensions';
 
 -- 4. check_duplicate_restaurant độc lập search_path (dùng st_distance, st_dwithin, similarity)
+set local search_path = public;
 select is(
-  (
-    set local search_path = public;
-    select count(*)::int from public.check_duplicate_restaurant('Test Pho', 21.0, 105.8) where id = 'dddd4444-4444-4444-4444-444444444444'
-  ),
+  (select count(*)::int from public.check_duplicate_restaurant('Test Pho', 21.0, 105.8) where id = 'dddd4444-4444-4444-4444-444444444444'),
   1,
   'T13 (Cloud search_path): check_duplicate_restaurant chạy thành công khi search_path = public'
 );
+set local search_path = 'public,extensions';
 
 -- 5. View public_reviews độc lập search_path
+set local search_path = public;
 select is(
-  (
-    set local search_path = public;
-    select count(*)::int from public.public_reviews where id = 'eeee5555-5555-5555-5555-555555555555'
-  ),
+  (select count(*)::int from public.public_reviews where id = 'eeee5555-5555-5555-5555-555555555555'),
   1,
   'T14 (Cloud search_path): view public_reviews truy vấn thành công khi search_path = public'
 );
+set local search_path = 'public,extensions';
 
 select * from finish();
 rollback;
