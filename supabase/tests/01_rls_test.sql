@@ -54,7 +54,10 @@ select is_empty(
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 
 -- Chứng minh Test 4 chạy đúng vai
+select diag('>>> CURRENT_USER: ' || current_user::text);
 select is(current_user::text, 'authenticated', 'T4.1: current_user là authenticated');
+
+select diag('>>> AUTH.UID(): ' || coalesce(auth.uid()::text, 'NULL'));
 select is(auth.uid(), 'bbbb2222-2222-2222-2222-222222222222'::uuid, 'T4.2: auth.uid() là User B');
 
 -- Yêu cầu (b): B không được đọc/sửa/xóa của A
