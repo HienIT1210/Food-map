@@ -78,4 +78,4 @@ E2E:             npx playwright test     # chưa cài; M9
 
 | Thời gian | Agent/Tool | Đã làm gì | Commit |
 |---|---|---|---|
-| 2026-10-03 | Cursor Grok | Scaffold Next.js 16 + Tailwind 4 + next-intl + Vitest + Prettier + supabase init + CI M0 | (hash sau commit) |
+| 2026-10-04 | Cursor Grok | M0: Next.js 16 + Tailwind 4 + next-intl + Vitest + supabase init + CI; `npm run dev` OK | 85a8c73 |
