@@ -3,6 +3,9 @@ create extension if not exists pgtap;
 
 select plan(3);
 
+-- Mô phỏng môi trường Cloud: đặt search_path = public
+set search_path = public;
+
 -- Test trigger handle_new_user: khi insert vào auth.users, profile tự động được tạo
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at

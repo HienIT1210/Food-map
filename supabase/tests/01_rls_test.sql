@@ -1,6 +1,10 @@
 begin;
 create extension if not exists pgtap;
 
+-- Mô phỏng môi trường Cloud: đặt search_path của session chỉ còn public
+-- để bắt buộc mọi đối tượng hoặc lệnh gọi extension phải có schema tường minh hoặc qua hàm có search_path cấu hình đúng.
+set search_path = public;
+
 -- Đặt kế hoạch (tổng số tests)
 select plan(11);
 
@@ -18,10 +22,10 @@ insert into public.profiles (id, display_name) values
 on conflict (id) do update 
   set display_name = excluded.display_name;
 
--- Tạo quán
+-- Tạo quán (sử dụng extensions.st_* tường minh)
 insert into public.restaurants (id, name, location, status) values
-  ('dddd4444-4444-4444-4444-444444444444', 'Test Phở', st_setsrid(st_makepoint(105.8, 21.0), 4326), 'active'),
-  ('dddd4444-4444-4444-4444-444444444445', 'Test Bún', st_setsrid(st_makepoint(105.8, 21.0), 4326), 'active');
+  ('dddd4444-4444-4444-4444-444444444444', 'Test Phở', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active'),
+  ('dddd4444-4444-4444-4444-444444444445', 'Test Bún', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active');
 
 -- A viết review công khai
 insert into public.reviews (id, user_id, restaurant_id, rating, content, is_anonymous) values
@@ -74,6 +78,7 @@ delete from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555';
 
 -- Reset về superuser để kiểm tra nội dung gốc
 set local role postgres;
+set search_path = public;
 select is(
   (select content from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555'),
   'Good',
@@ -103,7 +108,7 @@ begin
   -- Thêm 9 quán khác nhau để A review không bị lỗi unique (user_id, restaurant_id)
   for i in 1..9 loop
     new_rest_id := gen_random_uuid();
-    insert into public.restaurants (id, name, location, status) values (new_rest_id, 'Quán ' || i, st_setsrid(st_makepoint(105.8, 21.0), 4326), 'active');
+    insert into public.restaurants (id, name, location, status) values (new_rest_id, 'Quán ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active');
     insert into public.reviews (user_id, restaurant_id, rating, content)
     values ('aaaa1111-1111-1111-1111-111111111111', new_rest_id, 5, 'Review ' || i);
   end loop;
@@ -123,13 +128,13 @@ select throws_ok(
 do $$
 begin
   for i in 1..5 loop
-    insert into public.restaurants (name, location, created_by) values ('Quán A ' || i, st_setsrid(st_makepoint(105.8, 21.0), 4326), 'aaaa1111-1111-1111-1111-111111111111');
+    insert into public.restaurants (name, location, created_by) values ('Quán A ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'aaaa1111-1111-1111-1111-111111111111');
   end loop;
 end;
 $$;
 
 select throws_ok(
-  'insert into public.restaurants (name, location, created_by) values (''Quán A 6'', st_setsrid(st_makepoint(105.8, 21.0), 4326), ''aaaa1111-1111-1111-1111-111111111111'')',
+  'insert into public.restaurants (name, location, created_by) values (''Quán A 6'', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), ''aaaa1111-1111-1111-1111-111111111111'')',
   'Đã vượt quá giới hạn tạo 5 địa điểm mỗi ngày.',
   'T9 (d): Chặn insert nhà hàng thứ 6 trong ngày'
 );

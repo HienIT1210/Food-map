@@ -1,10 +1,10 @@
--- Bật các extensions trong schema "extensions" (mặc định của Supabase)
+-- Bật các extensions trong schema "extensions" (chuẩn của Supabase Cloud và local)
 create schema if not exists extensions;
-create extension if not exists postgis schema extensions;
-create extension if not exists pg_trgm schema extensions;
-create extension if not exists unaccent schema extensions;
+create extension if not exists postgis with schema extensions;
+create extension if not exists pg_trgm with schema extensions;
+create extension if not exists unaccent with schema extensions;
 
--- Hàm bọc unaccent, trỏ đến hàm trong schema extensions để dùng trong INDEX
+-- Hàm bọc unaccent, trỏ đến hàm trong schema extensions để dùng trong INDEX (phải IMMUTABLE)
 create or replace function public.f_unaccent(text)
 returns text language sql immutable parallel safe as
 $$ select extensions.unaccent('extensions.unaccent', $1) $$;
@@ -36,12 +36,13 @@ create table public.dishes (
 );
 
 -- 3. Bảng Restaurants
+-- Lưu ý: Sử dụng tường minh kiểu extensions.geography để tương thích tuyệt đối trên Supabase Cloud
 create table public.restaurants (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   address text,
   province text,
-  location geography(Point,4326) not null,
+  location extensions.geography(Point,4326) not null,
   created_by uuid references public.profiles(id) on delete set null,
   source text not null default 'user' check (source in ('user','seed')),
   status text not null default 'active' check (status in ('active','hidden_pending_review','closed','removed')),
@@ -143,18 +144,17 @@ alter table public.reports enable row level security;
 alter table public.blocks enable row level security;
 alter table public.admin_audit_log enable row level security;
 
--- Profiles: Bất cứ ai cũng có thể đọc (trừ những thông tin nhạy cảm có thể ẩn qua view/API).
--- Mặc dù RLS khóa mọi thứ, ta mở SELECT cho tất cả.
+-- Profiles
 create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
 create policy "Users can insert their own profile" on public.profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id)
   with check (auth.uid() = id);
 
--- Categories & Dishes: Mọi người đều đọc được, chỉ admin mới sửa được (ở M1 chưa cần chi tiết sửa, chỉ cần SELECT).
+-- Categories & Dishes
 create policy "Categories viewable by everyone" on public.dish_categories for select using (true);
 create policy "Dishes viewable by everyone" on public.dishes for select using (true);
 
--- Restaurants: Ai cũng xem được quán active, người đăng nhập tạo được.
+-- Restaurants
 create policy "Active restaurants viewable by everyone" on public.restaurants for select 
   using (status = 'active');
 create policy "Users can insert restaurants" on public.restaurants for insert 
@@ -162,15 +162,14 @@ create policy "Users can insert restaurants" on public.restaurants for insert
 
 create policy "Restaurant dishes viewable by everyone" on public.restaurant_dishes for select using (true);
 
--- Reviews: Client KHÔNG THỂ select trực tiếp review của người khác (sẽ dùng view `public_reviews`).
--- Users chỉ xem và sửa/xóa review của chính mình.
+-- Reviews: Client KHÔNG THỂ select trực tiếp review của người khác (dùng view public_reviews)
 create policy "Users can view own reviews" on public.reviews for select using (auth.uid() = user_id);
 create policy "Users can insert own reviews" on public.reviews for insert with check (auth.uid() = user_id);
 create policy "Users can update own reviews" on public.reviews for update using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 create policy "Users can delete own reviews" on public.reviews for delete using (auth.uid() = user_id);
 
--- Review Photos: Tương tự, chỉ tác giả xem và sửa. Khách sẽ qua view/storage bucket.
+-- Review Photos
 create policy "Users can view own review photos" on public.review_photos for select 
   using (exists (select 1 from public.reviews r where r.id = review_id and r.user_id = auth.uid()));
 create policy "Users can insert own review photos" on public.review_photos for insert 
@@ -192,15 +191,11 @@ create policy "Users can manage own reports" on public.reports for all using (au
 -- Blocks
 create policy "Users can manage own blocks" on public.blocks for all using (auth.uid() = blocker_id);
 
--- Admin Log: Không cho public xem/ghi. (Chỉ Security Definer Functions mới ghi vào đây)
-
 
 -- ==========================================
 -- VIEWS
 -- ==========================================
 
--- Chú ý quan trọng: View chạy bằng quyền của "Invoker" theo mặc định từ Postgres 15+, 
--- để lấy quyền chủ sở hữu ta dùng 'security_invoker = off' (mặc định của PG < 15, nhưng Supabase khuyến khích chỉ định).
 create view public.public_reviews 
 with (security_invoker = off) as
 select
@@ -252,14 +247,14 @@ as $$
   select 
     r.id, 
     r.name, 
-    st_y(r.location::geometry) as lat, 
-    st_x(r.location::geometry) as lng, 
+    extensions.st_y(r.location::extensions.geometry) as lat, 
+    extensions.st_x(r.location::extensions.geometry) as lng, 
     r.avg_rating, 
     r.review_count,
     r.status
   from public.restaurants r
   where r.status = 'active'
-    and r.location && st_makeenvelope(min_lng, min_lat, max_lng, max_lat, 4326)
+    and r.location && extensions.st_makeenvelope(min_lng, min_lat, max_lng, max_lat, 4326)
   limit lim;
 $$;
 
@@ -295,8 +290,8 @@ $$;
 create or replace function public.check_review_limits()
 returns trigger
 language plpgsql
-security definer -- Security definer để có thể đọc toàn bộ bảng reviews
-set search_path = public, pg_temp
+security definer
+set search_path = public, extensions, pg_temp
 as $$
 declare
   daily_count int;
@@ -322,7 +317,7 @@ create or replace function public.check_restaurant_limits()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = public, extensions, pg_temp
 as $$
 declare
   daily_count int;

@@ -32,9 +32,9 @@ values
 -- Tạo Restaurants (vài chục quán, toạ độ khu vực Hồ Chí Minh / Hà Nội)
 insert into public.restaurants (id, name, address, location, created_by, source, status, avg_rating, review_count)
 values 
-  ('30000000-0000-0000-0000-000000000001', 'Phở Hòa Pasteur', '260C Pasteur, Quận 3, TP.HCM', st_setsrid(st_makepoint(106.690850, 10.785460), 4326), '11111111-1111-1111-1111-111111111111', 'seed', 'active', 4.5, 1),
-  ('30000000-0000-0000-0000-000000000002', 'Bún Chả Hương Liên', '24 Lê Văn Hưu, Hà Nội', st_setsrid(st_makepoint(105.852860, 21.017770), 4326), '11111111-1111-1111-1111-111111111111', 'seed', 'active', 4.0, 1),
-  ('30000000-0000-0000-0000-000000000003', 'Cơm Tấm Ba Ghiền', '84 Đặng Văn Ngữ, Phú Nhuận, TP.HCM', st_setsrid(st_makepoint(106.674930, 10.793610), 4326), '11111111-1111-1111-1111-111111111111', 'seed', 'active', 4.2, 0);
+  ('30000000-0000-0000-0000-000000000001', 'Phở Hòa Pasteur', '260C Pasteur, Quận 3, TP.HCM', extensions.st_setsrid(extensions.st_makepoint(106.690850, 10.785460), 4326), '11111111-1111-1111-1111-111111111111', 'seed', 'active', 4.5, 1),
+  ('30000000-0000-0000-0000-000000000002', 'Bún Chả Hương Liên', '24 Lê Văn Hưu, Hà Nội', extensions.st_setsrid(extensions.st_makepoint(105.852860, 21.017770), 4326), '11111111-1111-1111-1111-111111111111', 'seed', 'active', 4.0, 1),
+  ('30000000-0000-0000-0000-000000000003', 'Cơm Tấm Ba Ghiền', '84 Đặng Văn Ngữ, Phú Nhuận, TP.HCM', extensions.st_setsrid(extensions.st_makepoint(106.674930, 10.793610), 4326), '11111111-1111-1111-1111-111111111111', 'seed', 'active', 4.2, 0);
 
 -- Thêm món cho quán
 insert into public.restaurant_dishes (restaurant_id, dish_id, price_vnd)
