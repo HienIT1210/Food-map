@@ -35,7 +35,18 @@ jobs:
         run: supabase start
       - name: Simulate Supabase Cloud migration (search_path = public)
         run: |
-          docker exec $(docker ps -q --filter "name=supabase_db" | head -n 1) psql -U postgres -d postgres -c "ALTER ROLE postgres SET search_path TO public; ALTER ROLE supabase_admin SET search_path TO public;"
-          supabase db reset
+          CONTAINER=$(docker ps -q --filter "name=supabase_db" | head -n 1)
+          # Clean public schema
+          docker exec $CONTAINER psql -U postgres -d postgres -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+          # Apply each migration file strictly under search_path = public
+          for file in $(ls -1 supabase/migrations/*.sql | sort); do
+            echo "Applying migration: $file with PGOPTIONS='-c search_path=public'..."
+            docker exec -e PGOPTIONS="-c search_path=public" -i $CONTAINER psql -U postgres -d postgres -v ON_ERROR_STOP=1 < "$file"
+          done
+          # Apply seed under search_path = public
+          if [ -f supabase/seed.sql ]; then
+            echo "Applying seed with PGOPTIONS='-c search_path=public'..."
+            docker exec -e PGOPTIONS="-c search_path=public" -i $CONTAINER psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seed.sql
+          fi
       - name: Run pgTAP / RLS tests
         run: supabase test db
