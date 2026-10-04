@@ -10,7 +10,10 @@ values
 insert into public.profiles (id, display_name, role)
 values 
   ('11111111-1111-1111-1111-111111111111', 'Người dùng 1', 'user'),
-  ('22222222-2222-2222-2222-222222222222', 'Người dùng 2', 'user');
+  ('22222222-2222-2222-2222-222222222222', 'Người dùng 2', 'user')
+on conflict (id) do update 
+  set display_name = excluded.display_name,
+      role = excluded.role;
 
 -- Tạo Categories
 insert into public.dish_categories (id, name, region)

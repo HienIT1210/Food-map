@@ -14,7 +14,9 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
 insert into public.profiles (id, display_name) values 
   ('aaaa1111-1111-1111-1111-111111111111', 'User A'),
   ('bbbb2222-2222-2222-2222-222222222222', 'User B'),
-  ('cccc3333-3333-3333-3333-333333333333', 'User C (Blocked)');
+  ('cccc3333-3333-3333-3333-333333333333', 'User C (Blocked)')
+on conflict (id) do update 
+  set display_name = excluded.display_name;
 
 -- Tạo quán
 insert into public.restaurants (id, name, location, status) values
