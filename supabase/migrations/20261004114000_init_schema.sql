@@ -281,6 +281,34 @@ as $$
   limit lim;
 $$;
 
+-- Kiểm tra trùng quán: tìm quán gần trong bán kính ~50m và có độ tương đồng tên
+create or replace function public.check_duplicate_restaurant(
+  name text,
+  lat float,
+  lng float
+) returns table (
+  id uuid,
+  name text,
+  address text,
+  distance_meters float,
+  similarity float
+)
+language sql
+security invoker
+set search_path = public, extensions
+as $$
+  select 
+    r.id,
+    r.name,
+    r.address,
+    extensions.st_distance(r.location, extensions.st_setsrid(extensions.st_makepoint(lng, lat), 4326)::extensions.geography) as distance_meters,
+    extensions.similarity(public.f_unaccent(lower(r.name)), public.f_unaccent(lower(name))) as similarity
+  from public.restaurants r
+  where r.status = 'active'
+    and extensions.st_dwithin(r.location, extensions.st_setsrid(extensions.st_makepoint(lng, lat), 4326)::extensions.geography, 50)
+  order by similarity desc;
+$$;
+
 
 -- ==========================================
 -- GIỚI HẠN CHỐNG LẠM DỤNG (Abuse Limits)
