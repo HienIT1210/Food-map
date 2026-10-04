@@ -23,6 +23,18 @@ test-results/
 supabase/.branches/
 supabase/.temp/
 
+# yarn / pnp
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# certs
+*.pem
+
 # os / editor
 .DS_Store
 Thumbs.db

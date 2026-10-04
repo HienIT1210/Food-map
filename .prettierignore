@@ -1,0 +1,11 @@
+.next
+node_modules
+coverage
+playwright-report
+test-results
+package-lock.json
+*.ico
+*.png
+*.webp
+supabase/.temp
+supabase/.branches

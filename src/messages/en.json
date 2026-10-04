@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "title": "Food map",
+    "description": "Find places on the map, read dish reviews, and get directions."
+  },
+  "home": {
+    "title": "Dish review map",
+    "subtitle": "Project scaffold is ready. Map and reviews will land in later milestones."
+  }
+}

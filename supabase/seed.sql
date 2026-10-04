@@ -1,0 +1,2 @@
+-- Seed data is applied after migrations on `supabase db reset`.
+-- M0: empty on purpose. M1 will add sample restaurants marked source = 'seed'.
