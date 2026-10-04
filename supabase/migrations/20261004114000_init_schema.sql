@@ -42,7 +42,7 @@ create table public.restaurants (
   name text not null,
   address text,
   province text,
-  location geography(Point,4326) not null,
+  location extensions.geography(Point,4326) not null,
   created_by uuid references public.profiles(id) on delete set null,
   source text not null default 'user' check (source in ('user','seed')),
   status text not null default 'active' check (status in ('active','hidden_pending_review','closed','removed')),
