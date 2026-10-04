@@ -6,5 +6,47 @@
   "home": {
     "title": "Bản đồ review món ăn",
     "subtitle": "Khung dự án đã sẵn sàng. Bản đồ và review sẽ được thêm ở các milestone sau."
+  },
+  "auth": {
+    "signInTitle": "Đăng nhập",
+    "createAccount": "Tạo tài khoản mới",
+    "guestNotice": "Bạn có thể tự do xem bản đồ và review. Đăng nhập để viết review, thêm quán hoặc lưu địa điểm.",
+    "continueGoogle": "Tiếp tục với Google",
+    "orWithEmail": "hoặc bằng email",
+    "displayNameLabel": "Tên hiển thị",
+    "passwordLabel": "Mật khẩu (tối thiểu 6 ký tự)",
+    "signInBtn": "Đăng nhập",
+    "signUpBtn": "Tạo tài khoản",
+    "signUpSuccess": "Đăng ký thành công! Vui lòng kiểm tra email để xác nhận (nếu có yêu cầu xác thực).",
+    "signOut": "Đăng xuất",
+    "alreadyHaveAccount": "Đã có tài khoản? Đăng nhập",
+    "noAccountYet": "Chưa có tài khoản? Đăng ký ngay",
+    "guestMode": "Khách (Chỉ xem)",
+    "errors": {
+      "failed": "Thao tác không thành công. Vui lòng kiểm tra lại thông tin.",
+      "googleFailed": "Không thể kết nối với Google. Vui lòng thử lại."
+    }
+  },
+  "profile": {
+    "title": "Hồ sơ của tôi",
+    "guestTitle": "Chế độ Khách",
+    "guestDescription": "Bạn đang dùng ở chế độ Khách. Đăng nhập để lưu quán yêu thích, viết đánh giá và quản lý tài khoản.",
+    "displayName": "Tên hiển thị",
+    "avatarUrl": "Đường dẫn ảnh đại diện (URL)",
+    "save": "Lưu thay đổi",
+    "saving": "Đang lưu...",
+    "updateSuccess": "Cập nhật hồ sơ thành công!",
+    "updateFailed": "Cập nhật hồ sơ thất bại.",
+    "dangerZone": "Vùng nguy hiểm",
+    "deleteWarning": "Hành động này không thể hoàn tác. Mọi bài đánh giá, ảnh tải lên và dữ liệu tài khoản của bạn sẽ bị xoá vĩnh viễn.",
+    "deleteAccountBtn": "Xoá tài khoản",
+    "confirmDeleteMsg": "Bạn có chắc chắn muốn xoá vĩnh viễn tài khoản và toàn bộ bài đánh giá?",
+    "confirmDeleteBtn": "Tôi hiểu và muốn xoá tài khoản",
+    "cancel": "Huỷ",
+    "deleteFailed": "Xoá tài khoản thất bại. Vui lòng thử lại."
+  },
+  "demo": {
+    "guestActionNotice": "Hành động này yêu cầu đăng nhập. Thử bấm để kiểm tra tính năng Guest Mode!",
+    "writeReviewBtn": "Viết review (Hành động ghi)"
   }
 }

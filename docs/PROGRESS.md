@@ -2,21 +2,21 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-04 11:35 (UTC+7) bởi Antigravity
+**Cập nhật lần cuối:** 2026-10-04 14:45 (UTC+7) bởi Antigravity
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M1 (DoD đã chuẩn bị xong, chờ chạy CI)
-- **Tình trạng:** hoàn thành code M1 (Schema, RLS, view, RPC, seed, pgTAP test)
+- **Milestone đang làm:** M2 (Hoàn thành DoD M2)
+- **Tình trạng:** hoàn thành M2 (Auth, Chế độ Khách, Hồ sơ, Xóa tài khoản, Migration trigger profile, Edge Function)
 - **Nhánh git đang dùng:** main
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
 - [x] M1 — Schema, RLS, view công khai, RPC, seed, test RLS
-- [ ] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản
+- [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản
 - [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
@@ -29,16 +29,16 @@
 
 > Nếu không có gì dở dang, ghi "Không có".
 
-- **Việc:** Không có. (Người dùng sẽ tự push code và theo dõi CI GitHub Actions để verify Supabase database migration và pgTAP tests).
+- **Việc:** Không có.
 - **File liên quan:** —
 - **Dở ở chỗ nào / vì sao dừng:** —
 - **Có commit `wip:` chưa:** không
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. M2: Thiết lập Supabase Auth cho Google và Email (magic link hoặc password).
-2. M2: Tạo logic Auth trên client (Next.js server/client components), xử lý chế độ Khách (chỉ xem, không ghi).
-3. M2: Xây dựng UI và Edge function xóa tài khoản.
+1. M3: Cài đặt và cấu hình MapLibre GL JS (`react-map-gl/maplibre`), cấu hình style URL bản đồ từ biến môi trường.
+2. M3: Tích hợp RPC `restaurants_in_bounds` với TanStack Query, xử lý debounce 300ms và GeoJSON clustering.
+3. M3: Xây dựng bottom sheet thẻ tóm tắt quán và bộ lọc chip trên bản đồ.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -48,7 +48,7 @@ Lint:            npm run lint
 Type-check:      npx tsc --noEmit
 Test:            npm test
 Reset database:  npx supabase db reset   # cần Docker; không chạy trên máy Windows 8GB
-Test RLS:        npx supabase test db    # chỉ trên CI / máy có Docker, từ M1
+Test RLS:        npx supabase test db    # chỉ trên CI / máy có Docker
 E2E:             npx playwright test     # chưa cài; M9
 ```
 
@@ -58,7 +58,8 @@ E2E:             npx playwright test     # chưa cài; M9
 - Stack: Next.js (App Router) + TypeScript strict + Tailwind + Supabase + MapLibre GL JS
 - Review = bình luận (không có hệ thống bình luận riêng)
 - Ẩn danh = ẩn với người dùng khác, không phải ẩn với quản trị; ẩn danh làm bằng view công khai không chứa `user_id`
-- Đăng nhập: Google + Email; chế độ Khách chỉ xem
+- Đăng nhập: Google + Email/Mật khẩu; chế độ Khách chỉ xem, chỉ mở popup đăng nhập đúng lúc cần ghi
+- Xóa tài khoản: Edge Function `delete-account` dùng service role key, xóa user trong Auth dẫn tới cascade profile & review
 - Chỉ đường: mở liên kết Google Maps/Apple Maps, không dẫn đường trong app
 - Máy Windows 8GB: không Docker, không `supabase start`; RLS/pgTAP chạy trên GitHub Actions từ M1
 - Next.js 16.3.8 + Tailwind 4.3.3 + next-intl 4.14.9 (vi mặc định, `/en` cho English)
@@ -67,17 +68,21 @@ E2E:             npx playwright test     # chưa cài; M9
 
 - PWA M0 chỉ web app manifest; Serwist ở M9
 - `localePrefix: as-needed` nên `/` = tiếng Việt
-- Job CI `database` skip khi chưa có `supabase/migrations/*.sql`
-- View `public_reviews` chạy với quyền invoker=off (tức là chủ sở hữu) để vượt qua RLS và áp dụng cơ chế lọc ẩn danh.
+- Job CI `database` chạy tự động khi có migration
+- View `public_reviews` chạy với quyền invoker=off (chủ sở hữu)
+- Email auth: dùng email/mật khẩu kết hợp Google OAuth; xóa tài khoản qua Edge Function
 
 ## 8. Vấn đề / bug đã biết
 
-- `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này. GitHub Actions dùng `node-version: "24"` (bản 24 mới hơn).
+- `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này.
 - `next dev` tự thêm khối luật Next.js vào cuối `AGENTS.md`; nội dung luật repo gốc được giữ nguyên.
+- Deno Edge Functions trong `supabase/functions` được exclude khỏi `tsconfig.json` của Next.js để tránh xung đột kiểu type giữa Node và Deno.
 
 ## 9. Nhật ký bàn giao
 
 | Thời gian | Agent/Tool | Đã làm gì | Commit |
 |---|---|---|---|
 | 2026-10-04 | Cursor Grok | M0: Next.js 16 + Tailwind 4 + next-intl + Vitest + supabase init + CI; `npm run dev` OK | 85a8c73 |
-| 2026-10-04 | Antigravity | M1: Tạo schema, RLS policies, trigger chống lạm dụng, RPC tìm kiếm/bản đồ, view `public_reviews`, seed & test RLS. | [pending commit] |
+| 2026-10-04 | Antigravity | M1: Tạo schema, RLS policies, trigger chống lạm dụng, RPC tìm kiếm/bản đồ, view `public_reviews`, seed & test RLS. | 45c09ec |
+| 2026-10-04 | Antigravity | M1: Sửa logic test RLS, thêm diag cho auth.uid(), sửa CI start DB | a9b8d80 |
+| 2026-10-04 | Antigravity | M2: Auth (Google + Email), Profile, Chế độ Khách, Xóa tài khoản (Edge Function), migration trigger profile & pgTAP | [pending] |

@@ -6,5 +6,47 @@
   "home": {
     "title": "Dish review map",
     "subtitle": "Project scaffold is ready. Map and reviews will land in later milestones."
+  },
+  "auth": {
+    "signInTitle": "Sign In",
+    "createAccount": "Create an Account",
+    "guestNotice": "You can freely explore the map and reviews. Sign in to write reviews, add places, or save favorites.",
+    "continueGoogle": "Continue with Google",
+    "orWithEmail": "or with email",
+    "displayNameLabel": "Display Name",
+    "passwordLabel": "Password (at least 6 characters)",
+    "signInBtn": "Sign In",
+    "signUpBtn": "Sign Up",
+    "signUpSuccess": "Signed up successfully! Please check your email for confirmation if required.",
+    "signOut": "Sign Out",
+    "alreadyHaveAccount": "Already have an account? Sign in",
+    "noAccountYet": "Don't have an account? Sign up",
+    "guestMode": "Guest (View only)",
+    "errors": {
+      "failed": "Authentication failed. Please verify your details.",
+      "googleFailed": "Failed to connect to Google. Please try again."
+    }
+  },
+  "profile": {
+    "title": "My Profile",
+    "guestTitle": "Guest Mode",
+    "guestDescription": "You are browsing as a Guest. Sign in to save favorite spots, write reviews, and manage your account.",
+    "displayName": "Display Name",
+    "avatarUrl": "Avatar URL",
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "updateSuccess": "Profile updated successfully!",
+    "updateFailed": "Failed to update profile.",
+    "dangerZone": "Danger Zone",
+    "deleteWarning": "This action cannot be undone. All your reviews, uploaded photos, and account data will be permanently deleted.",
+    "deleteAccountBtn": "Delete Account",
+    "confirmDeleteMsg": "Are you sure you want to permanently delete your account and all reviews?",
+    "confirmDeleteBtn": "Yes, delete my account",
+    "cancel": "Cancel",
+    "deleteFailed": "Failed to delete account. Please try again."
+  },
+  "demo": {
+    "guestActionNotice": "This action requires an account. Try clicking to test Guest Mode gating!",
+    "writeReviewBtn": "Write a Review (Write Action)"
   }
 }
