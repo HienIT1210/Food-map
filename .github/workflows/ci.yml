@@ -33,5 +33,9 @@ jobs:
           version: 2.119.0
       - name: Start local database
         run: supabase start
+      - name: Simulate Supabase Cloud migration (search_path = public)
+        run: |
+          docker exec $(docker ps -q --filter "name=supabase_db" | head -n 1) psql -U postgres -d postgres -c "ALTER ROLE postgres SET search_path TO public; ALTER ROLE supabase_admin SET search_path TO public;"
+          supabase db reset
       - name: Run pgTAP / RLS tests
         run: supabase test db

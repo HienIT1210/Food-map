@@ -1,11 +1,11 @@
 begin;
-create extension if not exists pgtap;
+create extension if not exists pgtap with schema extensions;
 
 -- Khung test dùng search_path gồm public, extensions để các hàm của pgTAP luôn được tìm thấy
 set search_path = public, extensions;
 
 -- 3 tests ban đầu + 1 test kiểm chứng trigger handle_new_user chạy thành công khi phiên gọi có search_path = public
-select plan(4);
+select extensions.plan(4);
 
 -- Test trigger handle_new_user: khi insert vào auth.users, profile tự động được tạo
 insert into auth.users (
@@ -24,26 +24,26 @@ insert into auth.users (
 );
 
 -- Kiểm tra xem bảng public.profiles đã có dòng tương ứng chưa
-select is(
+select extensions.is(
   (select count(*)::int from public.profiles where id = '99999999-9999-9999-9999-999999999999'),
   1,
   'T1 (M2): Profile tự động được tạo khi có user mới trong auth.users'
 );
 
-select is(
+select extensions.is(
   (select display_name from public.profiles where id = '99999999-9999-9999-9999-999999999999'),
   'Nguyen Van Test',
   'T2 (M2): display_name lấy đúng từ raw_user_meta_data'
 );
 
-select is(
+select extensions.is(
   (select avatar_url from public.profiles where id = '99999999-9999-9999-9999-999999999999'),
   'https://example.com/avatar.png',
   'T3 (M2): avatar_url lấy đúng từ raw_user_meta_data'
 );
 
 -- Test kiểm chứng trigger handle_new_user hoạt động độc lập ngay cả khi phiên gọi chỉ có search_path = public
--- Đặt set local VÀ INSERT ra ngoài scalar subquery; chỉ để SELECT expression bên trong is(...)
+-- 1. Chạy INSERT khi search_path = public (trigger handle_new_user kích hoạt trong ngữ cảnh này)
 set local search_path = public;
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at
@@ -59,12 +59,14 @@ insert into auth.users (
   now(),
   now()
 );
-set local search_path = 'public,extensions';
-select is(
+
+-- 2. Đặt lại search_path = public, extensions để pgTAP hoạt động bình thường
+set local search_path = public, extensions;
+select extensions.is(
   (select count(*)::int from public.profiles where id = '88888888-8888-8888-8888-888888888888'),
   1,
   'T4 (M2 Cloud search_path): handle_new_user kích hoạt thành công khi phiên chỉ có search_path = public'
 );
 
-select * from finish();
+select * from extensions.finish();
 rollback;
