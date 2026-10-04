@@ -26,13 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     # Local Windows dev does not run Docker / supabase start.
     # This job is skipped until M1 adds SQL migrations.
-    if: hashFiles('supabase/migrations/*.sql') != ''
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v3
         with:
           version: 2.119.0
       - name: Start local database
-        run: supabase db start
+        run: supabase start
       - name: Run pgTAP / RLS tests
         run: supabase test db
