@@ -2,20 +2,20 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-04 10:55 (UTC+7) bởi Cursor Grok
+**Cập nhật lần cuối:** 2026-10-04 11:35 (UTC+7) bởi Antigravity
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M0 (DoD đã chạy xong trên máy dev)
-- **Tình trạng:** hoàn thành M0; chưa bắt đầu M1
+- **Milestone đang làm:** M1 (DoD đã chuẩn bị xong, chờ chạy CI)
+- **Tình trạng:** hoàn thành code M1 (Schema, RLS, view, RPC, seed, pgTAP test)
 - **Nhánh git đang dùng:** main
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
-- [ ] M1 — Schema, RLS, view công khai, RPC, seed, test RLS
+- [x] M1 — Schema, RLS, view công khai, RPC, seed, test RLS
 - [ ] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản
 - [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
@@ -29,16 +29,16 @@
 
 > Nếu không có gì dở dang, ghi "Không có".
 
-- **Việc:** Không có
+- **Việc:** Không có. (Người dùng sẽ tự push code và theo dõi CI GitHub Actions để verify Supabase database migration và pgTAP tests).
 - **File liên quan:** —
 - **Dở ở chỗ nào / vì sao dừng:** —
 - **Có commit `wip:` chưa:** không
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. M1: viết migration schema (profiles, dishes, restaurants, reviews, RLS, `public_reviews`, RPC `restaurants_in_bounds`) trong `supabase/migrations/`.
-2. M1: seed vài chục quán `source = 'seed'` trong `supabase/seed.sql`.
-3. M1: pgTAP trong `supabase/tests/` (không lộ `user_id` ẩn danh, không sửa review người khác, bounds đúng). Job CI `database` sẽ tự chạy khi có file `*.sql` trong migrations.
+1. M2: Thiết lập Supabase Auth cho Google và Email (magic link hoặc password).
+2. M2: Tạo logic Auth trên client (Next.js server/client components), xử lý chế độ Khách (chỉ xem, không ghi).
+3. M2: Xây dựng UI và Edge function xóa tài khoản.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -68,6 +68,7 @@ E2E:             npx playwright test     # chưa cài; M9
 - PWA M0 chỉ web app manifest; Serwist ở M9
 - `localePrefix: as-needed` nên `/` = tiếng Việt
 - Job CI `database` skip khi chưa có `supabase/migrations/*.sql`
+- View `public_reviews` chạy với quyền invoker=off (tức là chủ sở hữu) để vượt qua RLS và áp dụng cơ chế lọc ẩn danh.
 
 ## 8. Vấn đề / bug đã biết
 
@@ -79,3 +80,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | Thời gian | Agent/Tool | Đã làm gì | Commit |
 |---|---|---|---|
 | 2026-10-04 | Cursor Grok | M0: Next.js 16 + Tailwind 4 + next-intl + Vitest + supabase init + CI; `npm run dev` OK | 85a8c73 |
+| 2026-10-04 | Antigravity | M1: Tạo schema, RLS policies, trigger chống lạm dụng, RPC tìm kiếm/bản đồ, view `public_reviews`, seed & test RLS. | [pending commit] |
