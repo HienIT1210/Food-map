@@ -14,12 +14,6 @@ create policy "Users can insert own reviews" on public.reviews for insert
     )
   );
 
--- Mutation check: temporarily permit anonymous direct review reads and writes.
-create policy "Mutation anon can read reviews" on public.reviews for select to anon
-  using (true);
-create policy "Mutation anon can insert reviews" on public.reviews for insert to anon
-  with check (true);
-
 create or replace function public.enforce_anonymous_review_photo_path()
 returns trigger
 language plpgsql
