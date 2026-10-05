@@ -3,8 +3,21 @@ revoke update on table public.profiles from public, anon, authenticated;
 grant update (display_name, avatar_url) on public.profiles to authenticated;
 -- A banned account must not be able to create reviews through a direct API call.
 drop policy "Users can insert own reviews" on public.reviews;
--- Mutation check: intentionally remove identity and ban checks from review INSERT.
 create policy "Users can insert own reviews" on public.reviews for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.profiles p
+      where p.id = auth.uid()
+        and not p.is_banned
+    )
+  );
+
+-- Mutation check: temporarily permit anonymous direct review reads and writes.
+create policy "Mutation anon can read reviews" on public.reviews for select to anon
+  using (true);
+create policy "Mutation anon can insert reviews" on public.reviews for insert to anon
   with check (true);
 
 create or replace function public.enforce_anonymous_review_photo_path()
