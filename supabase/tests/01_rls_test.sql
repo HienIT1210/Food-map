@@ -12,12 +12,16 @@ select extensions.plan(38);
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at) values 
   ('00000000-0000-0000-0000-000000000000', 'aaaa1111-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 'a@ex.com', '', now(), now(), now()),
   ('00000000-0000-0000-0000-000000000000', 'bbbb2222-2222-2222-2222-222222222222', 'authenticated', 'authenticated', 'b@ex.com', '', now(), now(), now()),
-  ('00000000-0000-0000-0000-000000000000', 'cccc3333-3333-3333-3333-333333333333', 'authenticated', 'authenticated', 'c@ex.com', '', now(), now(), now());
+  ('00000000-0000-0000-0000-000000000000', 'cccc3333-3333-3333-3333-333333333333', 'authenticated', 'authenticated', 'c@ex.com', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'dddd7777-7777-7777-7777-777777777777', 'authenticated', 'authenticated', 'd@ex.com', '', now(), now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'eeee7777-7777-7777-7777-777777777777', 'authenticated', 'authenticated', 'e@ex.com', '', now(), now(), now());
 
 insert into public.profiles (id, display_name) values 
   ('aaaa1111-1111-1111-1111-111111111111', 'User A'),
   ('bbbb2222-2222-2222-2222-222222222222', 'User B'),
-  ('cccc3333-3333-3333-3333-333333333333', 'User C (Blocked)')
+  ('cccc3333-3333-3333-3333-333333333333', 'User C (Blocked)'),
+  ('dddd7777-7777-7777-7777-777777777777', 'User D (Rate Limit)'),
+  ('eeee7777-7777-7777-7777-777777777777', 'User E (Profile Privilege)')
 on conflict (id) do update 
   set display_name = excluded.display_name;
 
@@ -25,7 +29,8 @@ on conflict (id) do update
 insert into public.restaurants (id, name, location, status) values
   ('dddd4444-4444-4444-4444-444444444444', 'Test Phở', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active'),
   ('dddd4444-4444-4444-4444-444444444445', 'Test Bún', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active'),
-  ('dddd4444-4444-4444-4444-444444444446', 'Test Cơm', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active');
+  ('dddd4444-4444-4444-4444-444444444446', 'Test Cơm', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active'),
+  ('dddd4444-4444-4444-4444-444444444447', 'Test Cháo', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active');
 
 -- A viết review công khai
 insert into public.reviews (id, user_id, restaurant_id, rating, content, is_anonymous) values
@@ -41,6 +46,9 @@ insert into public.blocks (blocker_id, blocked_id) values ('aaaa1111-1111-1111-1
 -- C viết review (ở quán khác để tránh đụng unique user_id + restaurant_id nếu test chạy nhiều lần)
 insert into public.reviews (id, user_id, restaurant_id, rating, content, is_anonymous) values
   ('00007777-7777-7777-7777-777777777777', 'cccc3333-3333-3333-3333-333333333333', 'dddd4444-4444-4444-4444-444444444445', 1, 'Bad', false);
+
+insert into public.reviews (id, user_id, restaurant_id, rating, content, is_anonymous) values
+  ('eeee5555-5555-5555-5555-555555555556', 'aaaa1111-1111-1111-1111-111111111111', 'dddd4444-4444-4444-4444-444444444446', 5, 'T5 original', false);
 
 insert into public.review_photos (id, review_id, storage_path) values
   ('11118888-8888-8888-8888-888888888888', 'eeee5555-5555-5555-5555-555555555555', 'users/aaaa1111-1111-1111-1111-111111111111/reviews/photo.webp');
@@ -85,25 +93,23 @@ select extensions.is(
   'T4.3 (b): User B đọc được review của mình nhưng không thấy review của A (chứng minh thứ chặn là RLS chứ không phải permission denied)'
 );
 
-savepoint t5_isolation;
 set local role postgres;
 alter policy "Users can view own reviews" on public.reviews using (true);
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 
 -- UPDATE/DELETE bị RLS chặn sẽ không throw exception, mà trả về 0 rows affected.
-update public.reviews set content = 'Hack' where id = 'eeee5555-5555-5555-5555-555555555555';
-delete from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555';
+update public.reviews set content = 'Hack' where id = 'eeee5555-5555-5555-5555-555555555556';
+delete from public.reviews where id = 'eeee5555-5555-5555-5555-555555555556';
 
 -- Reset về superuser để kiểm tra nội dung gốc.
 set local role postgres;
 select extensions.is(
-  (select content from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555'),
-  'Good',
+  (select content from public.reviews where id = 'eeee5555-5555-5555-5555-555555555556'),
+  'T5 original',
   'T5 (b): User B không thể update hoặc delete review của A (nội dung gốc nguyên vẹn)'
 );
-rollback to savepoint t5_isolation;
-release savepoint t5_isolation;
+alter policy "Users can view own reviews" on public.reviews using (auth.uid() = user_id);
 set local role postgres;
 set search_path = public, extensions;
 
@@ -122,54 +128,46 @@ select extensions.is(
 );
 
 -- Yêu cầu (d): Giới hạn lạm dụng (phía server)
-savepoint review_limit_isolation;
 -- Tạo thêm data bằng quyền postgres trước khi thử
 do $$
 declare
   new_rest_id uuid;
 begin
-  -- Thêm 9 quán khác nhau để A review không bị lỗi unique (user_id, restaurant_id)
+  -- Thêm 9 quán khác nhau cho User D để cô lập bộ đếm review.
   for i in 1..9 loop
     new_rest_id := gen_random_uuid();
     insert into public.restaurants (id, name, location, status) values (new_rest_id, 'Quán ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active');
     insert into public.reviews (user_id, restaurant_id, rating, content)
-    values ('aaaa1111-1111-1111-1111-111111111111', new_rest_id, 5, 'Review ' || i);
+    values ('dddd7777-7777-7777-7777-777777777777', new_rest_id, 5, 'Review ' || i);
   end loop;
 end;
 $$;
 
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
 select extensions.throws_ok(
-  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''aaaa1111-1111-1111-1111-111111111111'', ''dddd4444-4444-4444-4444-444444444445'', 5, ''Over limit'')',
+  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''dddd7777-7777-7777-7777-777777777777'', ''dddd4444-4444-4444-4444-444444444445'', 5, ''Over limit'')',
   'Đã vượt quá giới hạn 10 review mỗi ngày.',
   'T8 (d): Chặn insert review thứ 11 trong ngày'
 );
-set local role postgres;
-rollback to savepoint review_limit_isolation;
-release savepoint review_limit_isolation;
 
 -- Test limit nhà hàng: 5 nhà hàng mỗi ngày
-savepoint restaurant_limit_isolation;
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 do $$
 begin
   for i in 1..5 loop
-    insert into public.restaurants (name, location, created_by) values ('Quán A ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'aaaa1111-1111-1111-1111-111111111111');
+    insert into public.restaurants (name, location, created_by) values ('Quán D ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'dddd7777-7777-7777-7777-777777777777');
   end loop;
 end;
 $$;
 
 select extensions.throws_ok(
-  'insert into public.restaurants (name, location, created_by) values (''Quán A 6'', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), ''aaaa1111-1111-1111-1111-111111111111'')',
+  'insert into public.restaurants (name, location, created_by) values (''Quán D 6'', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), ''dddd7777-7777-7777-7777-777777777777'')',
   'Đã vượt quá giới hạn tạo 5 địa điểm mỗi ngày.',
   'T9 (d): Chặn insert nhà hàng thứ 6 trong ngày'
 );
-set local role postgres;
-rollback to savepoint restaurant_limit_isolation;
-release savepoint restaurant_limit_isolation;
 
 -- ==============================================================================
 -- KIỂM CHỨNG TÍNH ĐỘC LẬP SEARCH_PATH (MÔ PHỎNG SUPABASE CLOUD PHIÊN GỌI CHỈ CÓ PUBLIC)
@@ -234,54 +232,45 @@ select extensions.is(
   'T14 (Cloud search_path): view public_reviews truy vấn thành công khi search_path = public'
 );
 
--- Security tests run in savepoints so unexpected successful writes cannot taint later assertions.
-savepoint profile_privilege_isolation;
+-- Each destructive security check uses a dedicated fixture so unexpected writes cannot affect later assertions.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"eeee7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 select extensions.throws_ok(
-  'update public.profiles set role = ''admin'' where id = ''bbbb2222-2222-2222-2222-222222222222''',
+  'update public.profiles set role = ''admin'' where id = ''eeee7777-7777-7777-7777-777777777777''',
   '42501', null,
-  'T15 (a): User B cannot promote their own profile'
+  'T15 (a): User E cannot promote their own profile'
 );
 select extensions.throws_ok(
-  'update public.profiles set is_banned = true where id = ''bbbb2222-2222-2222-2222-222222222222''',
+  'update public.profiles set is_banned = true where id = ''eeee7777-7777-7777-7777-777777777777''',
   '42501', null,
-  'T16 (a): User B cannot change their own ban status'
+  'T16 (a): User E cannot change their own ban status'
 );
 set local role postgres;
 select extensions.is(
-  (select role from public.profiles where id = 'bbbb2222-2222-2222-2222-222222222222'),
+  (select role from public.profiles where id = 'eeee7777-7777-7777-7777-777777777777'),
   'user',
-  'T17 (a): User B role remains user after rejected promotion'
+  'T17 (a): User E role remains user after rejected promotion'
 );
 select extensions.is(
-  (select is_banned from public.profiles where id = 'bbbb2222-2222-2222-2222-222222222222'),
+  (select is_banned from public.profiles where id = 'eeee7777-7777-7777-7777-777777777777'),
   false,
-  'T18 (a): User B remains unbanned after rejected self-ban'
+  'T18 (a): User E remains unbanned after rejected self-ban'
 );
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"eeee7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 select extensions.lives_ok(
-  'update public.profiles set display_name = ''User B updated'' where id = ''bbbb2222-2222-2222-2222-222222222222''',
-  'T19 (a): User B can still update an editable profile field'
+  'update public.profiles set display_name = ''User E updated'' where id = ''eeee7777-7777-7777-7777-777777777777''',
+  'T19 (a): User E can still update an editable profile field'
 );
-set local role postgres;
-rollback to savepoint profile_privilege_isolation;
-release savepoint profile_privilege_isolation;
 
-savepoint spoofed_review_isolation;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 select extensions.throws_ok(
-  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''aaaa1111-1111-1111-1111-111111111111'', ''dddd4444-4444-4444-4444-444444444446'', 5, ''Spoofed owner'')',
+  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''aaaa1111-1111-1111-1111-111111111111'', ''dddd4444-4444-4444-4444-444444444447'', 5, ''Spoofed owner'')',
   '42501', null,
   'T20 (b): User B cannot insert a review as User A'
 );
-set local role postgres;
-rollback to savepoint spoofed_review_isolation;
-release savepoint spoofed_review_isolation;
 
-savepoint anon_review_isolation;
 set local role anon;
 set local "request.jwt.claims" to '{"role":"anon"}';
 select extensions.is(
@@ -290,15 +279,11 @@ select extensions.is(
   'T21 (c): anon cannot read rows directly from reviews'
 );
 select extensions.throws_ok(
-  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''bbbb2222-2222-2222-2222-222222222222'', ''dddd4444-4444-4444-4444-444444444446'', 5, ''Anonymous insert'')',
+  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''bbbb2222-2222-2222-2222-222222222222'', ''dddd4444-4444-4444-4444-444444444447'', 5, ''Anonymous insert'')',
   '42501', null,
   'T22 (c): anon cannot insert a review'
 );
-set local role postgres;
-rollback to savepoint anon_review_isolation;
-release savepoint anon_review_isolation;
 
-savepoint restaurant_fields_isolation;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 update public.restaurants
@@ -320,8 +305,6 @@ select extensions.is(
   'active',
   'T25 (d): User B cannot change restaurant status'
 );
-rollback to savepoint restaurant_fields_isolation;
-release savepoint restaurant_fields_isolation;
 
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
@@ -335,7 +318,6 @@ select extensions.is((select count(*)::int from public.blocks), 0, 'T30 (e): Use
 select extensions.is((select count(*)::int from public.saved_items), 0, 'T31 (e): User B cannot see User A saved items');
 select extensions.is((select count(*)::int from public.admin_audit_log), 0, 'T32 (e): regular users cannot read admin audit log');
 
-savepoint banned_review_isolation;
 set local role postgres;
 update public.profiles set is_banned = true where id = 'cccc3333-3333-3333-3333-333333333333';
 set local role authenticated;
@@ -345,11 +327,7 @@ select extensions.throws_ok(
   '42501', null,
   'T33 (f): a banned user cannot insert a review'
 );
-set local role postgres;
-rollback to savepoint banned_review_isolation;
-release savepoint banned_review_isolation;
 
-savepoint anonymous_photo_path_isolation;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 select extensions.lives_ok(
@@ -361,11 +339,7 @@ select extensions.throws_ok(
   '23514', null,
   'T35 (g): anonymous review rejects a photo path containing user_id'
 );
-set local role postgres;
-rollback to savepoint anonymous_photo_path_isolation;
-release savepoint anonymous_photo_path_isolation;
 
-savepoint anonymize_review_path_isolation;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
 select extensions.throws_ok(
@@ -373,9 +347,6 @@ select extensions.throws_ok(
   '23514', null,
   'T36 (g): a review with an identifying photo path cannot be made anonymous'
 );
-set local role postgres;
-rollback to savepoint anonymize_review_path_isolation;
-release savepoint anonymize_review_path_isolation;
 
 select * from extensions.finish(true);
 rollback;
