@@ -163,7 +163,7 @@ create policy "Users can insert restaurants" on public.restaurants for insert
 create policy "Restaurant dishes viewable by everyone" on public.restaurant_dishes for select using (true);
 
 -- Reviews: Client KHÔNG THỂ select trực tiếp review của người khác (dùng view public_reviews)
-create policy "Users can view own reviews" on public.reviews for select using (true);
+create policy "Users can view own reviews" on public.reviews for select using (auth.uid() = user_id);
 create policy "Users can insert own reviews" on public.reviews for insert with check (auth.uid() = user_id);
 create policy "Users can update own reviews" on public.reviews for update using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
@@ -207,7 +207,7 @@ select
   r.is_anonymous,
   r.helpful_count,
   r.created_at,
-  case when r.is_anonymous then null else r.user_id end as author_id,
+  r.user_id as author_id,
   case when r.is_anonymous then null else p.display_name end as author_name,
   case when r.is_anonymous then null else p.avatar_url end as author_avatar
 from public.reviews r
