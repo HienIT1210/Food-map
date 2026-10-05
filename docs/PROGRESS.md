@@ -8,24 +8,20 @@
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M1 — hoàn tất follow-up kiểm thử bảo mật database
+- **Milestone đang làm:** M2 — hoàn tất xác thực, hồ sơ, xóa tài khoản
 - **Tình trạng:**
-  - Bước mô phỏng Cloud trong CI:
-    - Làm sạch public schema và khôi phục toàn bộ quyền mặc định của Supabase: `GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role`, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES/FUNCTIONS/SEQUENCES TO anon, authenticated, service_role`.
-    - Dọn dẹp `auth.users` (`DELETE FROM auth.users;`) trước khi áp dụng seed để tránh lỗi trùng lặp khóa chính `users_pkey`.
-    - Áp dụng các file migration và seed với `PGOPTIONS="-c search_path=public"` và `-v ON_ERROR_STOP=1`.
-  - Kiểm thử RLS:
-    - T4.3 chứng minh User B đọc được review của mình nhưng không thấy review A.
-    - `01_rls_test.sql` có 38 assertions; `02_auth_trigger_test.sql` có 4; tổng CI 42 tests. Run #28 xanh, `Result: PASS`.
-    - Mutation 3(a), 3(b), 3(c) đều làm test liên quan đỏ trên PR #3; PR đã đóng không merge, nhánh mutation đã xóa. Chi tiết ở `docs/SECURITY-TESTS.md`.
-- **Nhánh git đang dùng:** `security/m1-security-hardening`
-- **Tình trạng:** PR implementation #2 đang mở, chưa merge; CI xanh ở run #28. PR mutation #3 đã đóng không merge và nhánh đã xóa. `main` chưa đổi. Lint, type-check, unit tests và pgTAP CI đều pass. M2 chưa bắt đầu.
+  - Hoàn thiện luồng Xác thực M2 (Đăng nhập Google/Email, Chế độ khách không cho ghi, Profile UI, Xoá tài khoản qua Edge Function).
+  - Component `LoginModal`, `ProfileView`, hooks `useAuth` đã hoạt động tốt với `@supabase/ssr` (`createServerClient`, `createBrowserClient`).
+  - Edge function `delete-account` đã được cấu hình JWT validation và Admin Auth.
+  - Test pgTAP (M2) 4/4 assertions cho Auth trigger `handle_new_user` đã pass xanh trên CI.
+- **Nhánh git đang dùng:** `main`
+- **Tình trạng:** Sẵn sàng chuyển sang M3 (Bản đồ, MapLibre).
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
 - [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
-- [ ] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
+- [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
 - [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
@@ -38,16 +34,16 @@
 
 > Nếu không có gì dở dang, ghi "Không có".
 
-- **Việc:** Chờ merge PR #2 sau khi tài liệu mutation và handoff được commit, CI xanh.
-- **File liên quan:** `supabase/migrations/20261005100000_security_hardening.sql`, `supabase/tests/01_rls_test.sql`, `docs/SECURITY-TESTS.md`
-- **Dở ở chỗ nào / vì sao dừng:** PR #2 đang mở; sau khi merge, chủ dự án cần chạy `npx supabase db push`.
-- **Có commit `wip:` chưa:**
+- **Việc:** Không có
+- **File liên quan:** Không có
+- **Dở ở chỗ nào / vì sao dừng:** Hoàn thiện M2.
+- **Có commit `wip:` chưa:** Không
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Commit/push `docs/SECURITY-TESTS.md` và handoff cập nhật; xác nhận CI xanh trên PR #2.
-2. Merge PR #2 vào `main`, rồi xác nhận SHA và trạng thái sạch.
-3. Chạy `npx supabase db push` để áp dụng migration mới; giữ M2 chưa bắt đầu.
+1. Bắt đầu M3 (Cài đặt MapLibre GL JS).
+2. Tích hợp UI bản đồ toàn màn hình (MAP-01).
+3. Triển khai tải quán theo vùng (MAP-02).
 
 ## 5. Lệnh chạy / kiểm tra
 
