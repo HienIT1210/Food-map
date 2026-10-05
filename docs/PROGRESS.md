@@ -2,28 +2,29 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-05 14:25 (UTC+7) bởi GitHub Copilot
+**Cập nhật lần cuối:** 2026-10-05 15:00 (UTC+7) bởi GitHub Copilot
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M1 — bổ sung kiểm thử bảo mật và gia cố các quyền database
+- **Milestone đang làm:** M1 — hoàn tất follow-up kiểm thử bảo mật database
 - **Tình trạng:**
   - Bước mô phỏng Cloud trong CI:
     - Làm sạch public schema và khôi phục toàn bộ quyền mặc định của Supabase: `GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role`, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES/FUNCTIONS/SEQUENCES TO anon, authenticated, service_role`.
     - Dọn dẹp `auth.users` (`DELETE FROM auth.users;`) trước khi áp dụng seed để tránh lỗi trùng lặp khóa chính `users_pkey`.
     - Áp dụng các file migration và seed với `PGOPTIONS="-c search_path=public"` và `-v ON_ERROR_STOP=1`.
   - Kiểm thử RLS:
-    - Bổ sung kiểm chứng trong T4.3 (01_rls_test.sql): User B truy cập được review của chính mình (chứng minh có quyền SELECT trên bảng, không bị permission denied) nhưng không thấy review của User A (chứng minh thứ chặn là RLS).
-    - Giữ nguyên số test: 16 test trong `01_rls_test.sql` và 4 test trong `02_auth_trigger_test.sql` -> Tổng cộng 20 test (Files=2, Tests=20).
+    - T4.3 chứng minh User B đọc được review của mình nhưng không thấy review A.
+    - `01_rls_test.sql` có 38 assertions; `02_auth_trigger_test.sql` có 4; tổng CI 42 tests. Run #28 xanh, `Result: PASS`.
+    - Mutation 3(a), 3(b), 3(c) đều làm test liên quan đỏ trên PR #3; PR đã đóng không merge, nhánh mutation đã xóa. Chi tiết ở `docs/SECURITY-TESTS.md`.
 - **Nhánh git đang dùng:** `security/m1-security-hardening`
-- **Tình trạng:** M1 ban đầu đã hoàn tất; đang làm follow-up bảo mật theo yêu cầu. Nhánh này có migration hardening mới và tăng `01_rls_test.sql` từ 16 lên 38 assertions (tổng pgTAP dự kiến 42). Lint, type-check, unit tests đã pass; pgTAP đang chờ CI do Docker local không chạy. M2 chưa bắt đầu.
+- **Tình trạng:** PR implementation #2 đang mở, chưa merge; CI xanh ở run #28. PR mutation #3 đã đóng không merge và nhánh đã xóa. `main` chưa đổi. Lint, type-check, unit tests và pgTAP CI đều pass. M2 chưa bắt đầu.
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
-- [x] M1 — Schema, RLS, view công khai, RPC, seed, test RLS (16/16 pgTAP tests)
+- [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
 - [ ] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
 - [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
@@ -37,16 +38,16 @@
 
 > Nếu không có gì dở dang, ghi "Không có".
 
-- **Việc:** Không có
-- **File liên quan:**
-- **Dở ở chỗ nào / vì sao dừng:**
+- **Việc:** Chờ merge PR #2 sau khi tài liệu mutation và handoff được commit, CI xanh.
+- **File liên quan:** `supabase/migrations/20261005100000_security_hardening.sql`, `supabase/tests/01_rls_test.sql`, `docs/SECURITY-TESTS.md`
+- **Dở ở chỗ nào / vì sao dừng:** PR #2 đang mở; sau khi merge, chủ dự án cần chạy `npx supabase db push`.
 - **Có commit `wip:` chưa:**
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Chạy CI cho PR implementation; xác nhận migration mới và 42 pgTAP assertions xanh.
-2. Chạy mutation checks riêng cho T15-T16 (a), T20 (b), T21-T22 (c); ghi log vào `docs/SECURITY-TESTS.md`, đóng PR mutation và xóa nhánh.
-3. Merge implementation đã xanh vào `main`; không bắt đầu M2 trong bước này.
+1. Commit/push `docs/SECURITY-TESTS.md` và handoff cập nhật; xác nhận CI xanh trên PR #2.
+2. Merge PR #2 vào `main`, rồi xác nhận SHA và trạng thái sạch.
+3. Chạy `npx supabase db push` để áp dụng migration mới; giữ M2 chưa bắt đầu.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -104,4 +105,5 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-04 | Antigravity | fix(tests): gọi pgTAP qua `extensions.*`, chuẩn hóa phục hồi search_path và mô phỏng Cloud trong CI | 15faf09 |
 | 2026-10-05 | Antigravity | fix(ci): dọn auth.users + cấp lại default privileges trên public trong mô phỏng Cloud; bổ sung kiểm chứng RLS vs permission denied | [pending] |
 | 2026-10-05 | Người dùng (tự cập nhật) | Xác nhận M1: CI xanh (20 test), đã `supabase db push` lên cloud, RLS bật ở mọi bảng, trigger tạo hồ sơ có mặt | (hash commit mới nhất) |
-| 2026-10-05 | GitHub Copilot | Bắt đầu M1 security follow-up: T5 savepoint isolation, 22 assertions mới, migration mới cho profile privileges, banned reviews, anonymous photo paths; lint/type-check/unit tests xanh, chờ pgTAP Actions | pending |
+| 2026-10-05 | GitHub Copilot | M1 security follow-up: T5 fixture riêng, 22 assertions mới, migration hardening; PR #2 CI xanh ở run #28 | `71e841c` |
+| 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged |
