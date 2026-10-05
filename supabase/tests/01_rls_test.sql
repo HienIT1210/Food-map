@@ -133,8 +133,8 @@ do $$
 declare
   new_rest_id uuid;
 begin
-  -- Thêm 9 quán khác nhau cho User D để cô lập bộ đếm review.
-  for i in 1..9 loop
+  -- Thêm 10 quán khác nhau cho User D để cô lập bộ đếm review.
+  for i in 1..10 loop
     new_rest_id := gen_random_uuid();
     insert into public.restaurants (id, name, location, status) values (new_rest_id, 'Quán ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'active');
     insert into public.reviews (user_id, restaurant_id, rating, content)
