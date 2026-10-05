@@ -65,10 +65,11 @@ select extensions.is(current_user::text, 'authenticated', 'T4.1: current_user l�
 select extensions.diag('>>> AUTH.UID(): ' || coalesce(auth.uid()::text, 'NULL'));
 select extensions.is(auth.uid(), 'bbbb2222-2222-2222-2222-222222222222'::uuid, 'T4.2: auth.uid() là User B');
 
--- Yêu cầu (b): B không được đọc/sửa/xóa của A
-select extensions.is_empty(
-  'select 1 from public.reviews where id = ''eeee5555-5555-5555-5555-555555555555''',
-  'T4.3 (b): User B không thể SELECT trực tiếp bảng reviews của A (RLS chặn)'
+-- Yêu cầu (b): B đọc được review của chính mình (chứng minh có quyền SELECT trên bảng, không bị permission denied) nhưng không đọc được của A (do RLS chặn)
+select extensions.is(
+  (select array_agg(id order by id) from public.reviews where id in ('eeee5555-5555-5555-5555-555555555555', 'ffff6666-6666-6666-6666-666666666666')),
+  array['ffff6666-6666-6666-6666-666666666666'::uuid],
+  'T4.3 (b): User B đọc được review của mình nhưng không thấy review của A (chứng minh thứ chặn là RLS chứ không phải permission denied)'
 );
 
 -- UPDATE/DELETE bị RLS chặn sẽ không throw exception, mà trả về 0 rows affected.

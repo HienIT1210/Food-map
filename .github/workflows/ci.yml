@@ -36,8 +36,18 @@ jobs:
       - name: Simulate Supabase Cloud migration (search_path = public)
         run: |
           CONTAINER=$(docker ps -q --filter "name=supabase_db" | head -n 1)
-          # Clean public schema
-          docker exec $CONTAINER psql -U postgres -d postgres -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"
+          # Clean public schema and restore default privileges / grants
+          docker exec $CONTAINER psql -U postgres -d postgres -c "
+            DROP SCHEMA IF EXISTS public CASCADE;
+            CREATE SCHEMA public;
+            GRANT ALL ON SCHEMA public TO postgres;
+            GRANT ALL ON SCHEMA public TO public;
+            GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+            DELETE FROM auth.users;
+          "
           # Apply each migration file strictly under search_path = public
           for file in $(ls -1 supabase/migrations/*.sql | sort); do
             echo "Applying migration: $file with PGOPTIONS='-c search_path=public'..."

@@ -2,18 +2,21 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-04 16:55 (UTC+7) bởi Antigravity
+**Cập nhật lần cuối:** 2026-10-05 07:30 (UTC+7) bởi Antigravity
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M1/M2 — chuẩn hóa test pgTAP với schema qualification và mô phỏng Cloud
+- **Milestone đang làm:** M1/M2 — chuẩn hóa test pgTAP và hoàn thiện bước mô phỏng Cloud trong CI
 - **Tình trạng:**
-  - Khắc phục lỗi `is(...) does not exist` do gọi pgTAP khi search_path = public:
-    - Toàn bộ hàm pgTAP (`extensions.plan`, `extensions.is`, `extensions.isnt`, `extensions.is_empty`, `extensions.throws_ok`, `extensions.diag`, `extensions.finish`) được gọi kèm schema tường minh `extensions.*`.
-    - Các đoạn kiểm chứng tính độc lập search_path (T10–T14 ở 01_rls_test.sql và T4 ở 02_auth_trigger_test.sql): thực thi hàm cần test dưới `search_path = public` lưu kết quả vào temp table/insert, sau đó phục hồi `search_path = public, extensions;` để thực hiện assertion.
-  - Cập nhật `.github/workflows/ci.yml`: bổ sung bước mô phỏng Cloud bằng cách đặt search_path của role `postgres` & `supabase_admin` về `public` rồi chạy `supabase db reset`.
+  - Bước mô phỏng Cloud trong CI:
+    - Làm sạch public schema và khôi phục toàn bộ quyền mặc định của Supabase: `GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role`, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES/FUNCTIONS/SEQUENCES TO anon, authenticated, service_role`.
+    - Dọn dẹp `auth.users` (`DELETE FROM auth.users;`) trước khi áp dụng seed để tránh lỗi trùng lặp khóa chính `users_pkey`.
+    - Áp dụng các file migration và seed với `PGOPTIONS="-c search_path=public"` và `-v ON_ERROR_STOP=1`.
+  - Kiểm thử RLS:
+    - Bổ sung kiểm chứng trong T4.3 (01_rls_test.sql): User B truy cập được review của chính mình (chứng minh có quyền SELECT trên bảng, không bị permission denied) nhưng không thấy review của User A (chứng minh thứ chặn là RLS).
+    - Giữ nguyên số test: 16 test trong `01_rls_test.sql` và 4 test trong `02_auth_trigger_test.sql` -> Tổng cộng 20 test (Files=2, Tests=20).
 - **Nhánh git đang dùng:** main
 
 ## 2. Tiến độ milestone
@@ -33,16 +36,16 @@
 
 > Nếu không có gì dở dang, ghi "Không có".
 
-- **Việc:** Chờ kết quả CI sau khi đẩy bản fix schema prefix cho pgTAP và mô phỏng cloud.
-- **File liên quan:** `supabase/tests/01_rls_test.sql`, `supabase/tests/02_auth_trigger_test.sql`, `.github/workflows/ci.yml`
+- **Việc:** Đẩy commit sửa CI (dọn auth.users + khôi phục default privileges) và test T4.3 RLS vs permission denied, chờ CI xác nhận Files=2, Tests=20.
+- **File liên quan:** `supabase/tests/01_rls_test.sql`, `.github/workflows/ci.yml`
 - **Dở ở chỗ nào / vì sao dừng:** Chờ CI GitHub Actions chạy.
 - **Có commit `wip:` chưa:** không
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Đọc kết quả CI trên GitHub Actions: xác nhận Tests=16 (01_rls_test.sql) và Tests=4 (02_auth_trigger_test.sql), tổng cộng 20 test xanh.
-2. Kiểm chứng mô phỏng Cloud: thử tạm thời đổi `extensions.geography(Point,4326)` thành `geography(Point,4326)` để chứng minh CI bắt được lỗi và chuyển đỏ, sau đó hoàn tác.
-3. Chuyển sang M3 (Bản đồ và MapLibre).
+1. Đọc kết quả CI trên GitHub Actions: xác nhận Tests=16 (01_rls_test.sql) và Tests=4 (02_auth_trigger_test.sql), tổng cộng Files=2, Tests=20 xanh, có CURRENT_USER: authenticated và AUTH.UID() là UUID.
+2. Kiểm chứng DoD M1 và M2 đạt yêu cầu, đánh dấu hoàn thành M1, M2.
+3. Chuyển sang M3 (Bản đồ và MapLibre GL JS).
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -94,4 +97,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-04 | Antigravity | M2: Auth (Google + Email), Profile, Chế độ Khách, Xóa tài khoản (Edge Function), migration trigger profile & pgTAP | aac0909 |
 | 2026-10-04 | Antigravity | fix(tests): sửa syntax error `set local` trong scalar subquery — T10-T14 (01) và T4 (02) | a0895a6 |
 | 2026-10-04 | Antigravity | fix(tests): gọi pgTAP qua `extensions.*`, chuẩn hóa phục hồi search_path và mô phỏng Cloud trong CI | 15faf09 |
-| 2026-10-04 | Antigravity | test(ci): dùng psql PGOPTIONS='-c search_path=public' mô phỏng Cloud, kiểm chứng CI bắt lỗi geography | [pending] |
+| 2026-10-05 | Antigravity | fix(ci): dọn auth.users + cấp lại default privileges trên public trong mô phỏng Cloud; bổ sung kiểm chứng RLS vs permission denied | [pending] |
