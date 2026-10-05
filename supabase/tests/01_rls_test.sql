@@ -72,12 +72,19 @@ select extensions.is(
   'T4.3 (b): User B đọc được review của mình nhưng không thấy review của A (chứng minh thứ chặn là RLS chứ không phải permission denied)'
 );
 
+-- Tạm bỏ SELECT policy để T5 kiểm tra độc lập các policy UPDATE/DELETE.
+set local role postgres;
+drop policy "Users can view own reviews" on public.reviews;
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
+
 -- UPDATE/DELETE bị RLS chặn sẽ không throw exception, mà trả về 0 rows affected.
 update public.reviews set content = 'Hack' where id = 'eeee5555-5555-5555-5555-555555555555';
 delete from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555';
 
--- Reset về superuser để kiểm tra nội dung gốc
+-- Khôi phục SELECT policy trước khi kiểm tra dữ liệu bằng postgres.
 set local role postgres;
+create policy "Users can view own reviews" on public.reviews for select using (auth.uid() = user_id);
 set search_path = public, extensions;
 select extensions.is(
   (select content from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555'),
