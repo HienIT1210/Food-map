@@ -1,7 +1,5 @@
--- Protect account privilege fields while preserving normal profile edits.
 revoke update on table public.profiles from public, anon, authenticated;
-grant update (display_name, avatar_url) on table public.profiles to authenticated;
-
+grant update on table public.profiles to authenticated;
 -- A banned account must not be able to create reviews through a direct API call.
 drop policy "Users can insert own reviews" on public.reviews;
 create policy "Users can insert own reviews" on public.reviews for insert
