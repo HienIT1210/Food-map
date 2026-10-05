@@ -377,5 +377,5 @@ set local role postgres;
 rollback to savepoint anonymize_review_path_isolation;
 release savepoint anonymize_review_path_isolation;
 
-select * from extensions.finish();
+select * from extensions.finish(true);
 rollback;
