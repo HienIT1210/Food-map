@@ -18,11 +18,13 @@
     - Bổ sung kiểm chứng trong T4.3 (01_rls_test.sql): User B truy cập được review của chính mình (chứng minh có quyền SELECT trên bảng, không bị permission denied) nhưng không thấy review của User A (chứng minh thứ chặn là RLS).
     - Giữ nguyên số test: 16 test trong `01_rls_test.sql` và 4 test trong `02_auth_trigger_test.sql` -> Tổng cộng 20 test (Files=2, Tests=20).
 - **Nhánh git đang dùng:** main
+- **Milestone đang làm:** M2
+- **Tình trạng:** M1 hoàn tất và đã đẩy migration lên Supabase cloud; chưa bắt đầu M2
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
-- [ ] M1 — Schema, RLS, view công khai, RPC, seed, test RLS (16/16 pgTAP tests)
+- [x] M1 — Schema, RLS, view công khai, RPC, seed, test RLS (16/16 pgTAP tests)
 - [ ] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
 - [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
@@ -36,10 +38,10 @@
 
 > Nếu không có gì dở dang, ghi "Không có".
 
-- **Việc:** Đẩy commit sửa CI (dọn auth.users + khôi phục default privileges) và test T4.3 RLS vs permission denied, chờ CI xác nhận Files=2, Tests=20.
-- **File liên quan:** `supabase/tests/01_rls_test.sql`, `.github/workflows/ci.yml`
-- **Dở ở chỗ nào / vì sao dừng:** Chờ CI GitHub Actions chạy.
-- **Có commit `wip:` chưa:** không
+- **Việc:** Không có
+- **File liên quan:**
+- **Dở ở chỗ nào / vì sao dừng:**
+- **Có commit `wip:` chưa:**
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
@@ -71,6 +73,8 @@ E2E:             npx playwright test     # chưa cài; M9
 - Máy Windows 8GB: không Docker, không `supabase start`; RLS/pgTAP chạy trên GitHub Actions từ M1
 - Next.js 16.3.8 + Tailwind 4.3.3 + next-intl 4.14.9 (vi mặc định, `/en` cho English)
 - Tất cả hàm pgTAP trong test phải gọi kèm schema `extensions.*` và search_path phải phục hồi `public, extensions;` sau khi thử nghiệm ngữ cảnh cô lập `public`.
+- Dev dùng Supabase cloud, không dùng Docker ở máy; test database chạy trên GitHub Actions (có bước mô phỏng cloud với search_path=public)
+- Không nạp seed.sql lên cloud (nó chứa người dùng giả trong auth.users)
 
 ## 7. Giả định (chi tiết hơn ở `docs/ASSUMPTIONS.md`)
 
@@ -98,3 +102,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-04 | Antigravity | fix(tests): sửa syntax error `set local` trong scalar subquery — T10-T14 (01) và T4 (02) | a0895a6 |
 | 2026-10-04 | Antigravity | fix(tests): gọi pgTAP qua `extensions.*`, chuẩn hóa phục hồi search_path và mô phỏng Cloud trong CI | 15faf09 |
 | 2026-10-05 | Antigravity | fix(ci): dọn auth.users + cấp lại default privileges trên public trong mô phỏng Cloud; bổ sung kiểm chứng RLS vs permission denied | [pending] |
+| 2026-10-05 | Người dùng (tự cập nhật) | Xác nhận M1: CI xanh (20 test), đã `supabase db push` lên cloud, RLS bật ở mọi bảng, trigger tạo hồ sơ có mặt | (hash commit mới nhất) |
