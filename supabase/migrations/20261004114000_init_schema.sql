@@ -165,9 +165,9 @@ create policy "Restaurant dishes viewable by everyone" on public.restaurant_dish
 -- Reviews: Client KHÔNG THỂ select trực tiếp review của người khác (dùng view public_reviews)
 create policy "Users can view own reviews" on public.reviews for select using (auth.uid() = user_id);
 create policy "Users can insert own reviews" on public.reviews for insert with check (auth.uid() = user_id);
-create policy "Users can update own reviews" on public.reviews for update using (true)
-  with check (true);
-create policy "Users can delete own reviews" on public.reviews for delete using (true);
+create policy "Users can update own reviews" on public.reviews for update using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+create policy "Users can delete own reviews" on public.reviews for delete using (auth.uid() = user_id);
 
 -- Review Photos
 create policy "Users can view own review photos" on public.review_photos for select 
