@@ -85,6 +85,7 @@ delete from public.reviews where id = 'eeee5555-5555-5555-5555-555555555555';
 
 -- Khôi phục SELECT policy trước khi kiểm tra dữ liệu bằng postgres.
 set local role postgres;
+drop policy "Users can view own reviews" on public.reviews;
 create policy "Users can view own reviews" on public.reviews for select using (auth.uid() = user_id);
 set search_path = public, extensions;
 select extensions.is(
