@@ -2,13 +2,13 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-05 07:30 (UTC+7) bởi Antigravity
+**Cập nhật lần cuối:** 2026-10-05 14:25 (UTC+7) bởi GitHub Copilot
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M1/M2 — chuẩn hóa test pgTAP và hoàn thiện bước mô phỏng Cloud trong CI
+- **Milestone đang làm:** M1 — bổ sung kiểm thử bảo mật và gia cố các quyền database
 - **Tình trạng:**
   - Bước mô phỏng Cloud trong CI:
     - Làm sạch public schema và khôi phục toàn bộ quyền mặc định của Supabase: `GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role`, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES/FUNCTIONS/SEQUENCES TO anon, authenticated, service_role`.
@@ -17,9 +17,8 @@
   - Kiểm thử RLS:
     - Bổ sung kiểm chứng trong T4.3 (01_rls_test.sql): User B truy cập được review của chính mình (chứng minh có quyền SELECT trên bảng, không bị permission denied) nhưng không thấy review của User A (chứng minh thứ chặn là RLS).
     - Giữ nguyên số test: 16 test trong `01_rls_test.sql` và 4 test trong `02_auth_trigger_test.sql` -> Tổng cộng 20 test (Files=2, Tests=20).
-- **Nhánh git đang dùng:** main
-- **Milestone đang làm:** M2
-- **Tình trạng:** M1 hoàn tất và đã đẩy migration lên Supabase cloud; chưa bắt đầu M2
+- **Nhánh git đang dùng:** `security/m1-security-hardening`
+- **Tình trạng:** M1 ban đầu đã hoàn tất; đang làm follow-up bảo mật theo yêu cầu. Nhánh này có migration hardening mới và tăng `01_rls_test.sql` từ 16 lên 38 assertions (tổng pgTAP dự kiến 42). Lint, type-check, unit tests đã pass; pgTAP đang chờ CI do Docker local không chạy. M2 chưa bắt đầu.
 
 ## 2. Tiến độ milestone
 
@@ -45,9 +44,9 @@
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Đọc kết quả CI trên GitHub Actions: xác nhận Tests=16 (01_rls_test.sql) và Tests=4 (02_auth_trigger_test.sql), tổng cộng Files=2, Tests=20 xanh, có CURRENT_USER: authenticated và AUTH.UID() là UUID.
-2. Kiểm chứng DoD M1 và M2 đạt yêu cầu, đánh dấu hoàn thành M1, M2.
-3. Chuyển sang M3 (Bản đồ và MapLibre GL JS).
+1. Chạy CI cho PR implementation; xác nhận migration mới và 42 pgTAP assertions xanh.
+2. Chạy mutation checks riêng cho T15-T16 (a), T20 (b), T21-T22 (c); ghi log vào `docs/SECURITY-TESTS.md`, đóng PR mutation và xóa nhánh.
+3. Merge implementation đã xanh vào `main`; không bắt đầu M2 trong bước này.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -75,6 +74,8 @@ E2E:             npx playwright test     # chưa cài; M9
 - Tất cả hàm pgTAP trong test phải gọi kèm schema `extensions.*` và search_path phải phục hồi `public, extensions;` sau khi thử nghiệm ngữ cảnh cô lập `public`.
 - Dev dùng Supabase cloud, không dùng Docker ở máy; test database chạy trên GitHub Actions (có bước mô phỏng cloud với search_path=public)
 - Không nạp seed.sql lên cloud (nó chứa người dùng giả trong auth.users)
+- `profiles` chỉ cho `authenticated` cập nhật `display_name` và `avatar_url`; các cột `role` và `is_banned` bị giới hạn bằng column privileges.
+- Review insert phải kiểm tra trạng thái `profiles.is_banned`; photo path không được chứa UUID chủ review khi review ẩn danh.
 
 ## 7. Giả định (chi tiết hơn ở `docs/ASSUMPTIONS.md`)
 
@@ -103,3 +104,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-04 | Antigravity | fix(tests): gọi pgTAP qua `extensions.*`, chuẩn hóa phục hồi search_path và mô phỏng Cloud trong CI | 15faf09 |
 | 2026-10-05 | Antigravity | fix(ci): dọn auth.users + cấp lại default privileges trên public trong mô phỏng Cloud; bổ sung kiểm chứng RLS vs permission denied | [pending] |
 | 2026-10-05 | Người dùng (tự cập nhật) | Xác nhận M1: CI xanh (20 test), đã `supabase db push` lên cloud, RLS bật ở mọi bảng, trigger tạo hồ sơ có mặt | (hash commit mới nhất) |
+| 2026-10-05 | GitHub Copilot | Bắt đầu M1 security follow-up: T5 savepoint isolation, 22 assertions mới, migration mới cho profile privileges, banned reviews, anonymous photo paths; lint/type-check/unit tests xanh, chờ pgTAP Actions | pending |
