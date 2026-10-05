@@ -72,9 +72,10 @@ select extensions.is(
   'T4.3 (b): User B đọc được review của mình nhưng không thấy review của A (chứng minh thứ chặn là RLS chứ không phải permission denied)'
 );
 
--- Tạm bỏ SELECT policy để T5 kiểm tra độc lập các policy UPDATE/DELETE.
+-- Tạm mở SELECT để T5 kiểm tra độc lập các policy UPDATE/DELETE.
 set local role postgres;
 drop policy "Users can view own reviews" on public.reviews;
+create policy "Users can view own reviews" on public.reviews for select using (true);
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 
