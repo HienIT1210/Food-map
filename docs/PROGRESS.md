@@ -2,27 +2,25 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-05 15:00 (UTC+7) bởi GitHub Copilot
+**Cập nhật lần cuối:** 2026-10-06 bởi Codex
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M3 — hoàn tất Bản đồ, Clustering, Bottom Sheet, Filter.
-- **Tình trạng:**
-  - `seed-cloud.sql` đã được tạo để test 30 quán hư cấu, chạy trong CI.
-  - UI Bản đồ tích hợp với `react-map-gl/maplibre`.
-  - RPC `restaurants_in_bounds` được gọi qua hook với debounce 300ms và `AbortController`.
-  - Các state/chức năng bản đồ đáp ứng đủ yêu cầu của M3.
+- **Milestone đang làm:** M3 — Bản đồ, clustering, thẻ quán, bộ lọc (đang xác minh DoD)
+- **Tình trạng:** Code M3 hiện có MapLibre toàn màn hình, hook tải quán theo vùng có debounce/AbortController, clustering, pin, định vị, thẻ quán, BottomNav, filter chips; `supabase/seed-cloud.sql` và `supabase/tests/03_seed_cloud_test.sql` đã có.
+  - Sửa type/API cho `react-map-gl` 8.1.3 và `maplibre-gl` 6.12.0; attribution control vẫn hiển thị.
+  - Bốn lệnh cục bộ pass; kiểm tra tương tác tay và CI xanh sau sửa chưa được xác nhận.
 - **Nhánh git đang dùng:** `main`
-- **Tình trạng:** M3 hoàn tất. Sẵn sàng cho M4.
+- **Tình trạng:** Code M3 và bốn kiểm tra cục bộ hoàn tất; DoD thao tác tay và CI chưa được xác minh, chưa chuyển M4.
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
 - [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
-- [x] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
+- [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc (code xong; kiểm tra tay + CI còn thiếu)
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
 - [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
@@ -32,18 +30,16 @@
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-> Nếu không có gì dở dang, ghi "Không có".
-
-- **Việc:** Không có
-- **File liên quan:** Không có
-- **Dở ở chỗ nào / vì sao dừng:** Hoàn thiện M2.
-- **Có commit `wip:` chưa:** Không
+- **Việc:** Xác minh M3 bằng thao tác thủ công và xác nhận CI xanh.
+- **File liên quan:** `src/features/map/components/MapComponent.tsx`, `docs/PROGRESS.md`.
+- **Dở ở chỗ nào / vì sao dừng:** Chưa thử kéo/zoom và từ chối quyền vị trí trên trình duyệt; chưa có bằng chứng CI xanh sau sửa API.
+- **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Bắt đầu M4 (Tìm kiếm có dấu/không dấu, thuật toán trigram).
-2. Tích hợp thanh tìm kiếm trên giao diện Bản đồ (SRCH-01, SRCH-02).
-3. Xây dựng trang chi tiết quán (RES-01).
+1. Mở app với `NEXT_PUBLIC_MAP_STYLE_URL`, xác nhận kéo/zoom tải đúng quán.
+2. Từ chối quyền vị trí, xác nhận bản đồ tiếp tục dùng được.
+3. Xác nhận CI xanh và cập nhật trạng thái DoD M3; chưa bắt đầu M4.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -102,4 +98,5 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-05 | Antigravity | fix(ci): dọn auth.users + cấp lại default privileges trên public trong mô phỏng Cloud; bổ sung kiểm chứng RLS vs permission denied | [pending] |
 | 2026-10-05 | Người dùng (tự cập nhật) | Xác nhận M1: CI xanh (20 test), đã `supabase db push` lên cloud, RLS bật ở mọi bảng, trigger tạo hồ sơ có mặt | (hash commit mới nhất) |
 | 2026-10-05 | GitHub Copilot | M1 security follow-up: T5 fixture riêng, 22 assertions mới, migration hardening; PR #2 CI xanh ở run #28 | `71e841c` |
-| 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged || 2026-10-06 | Antigravity | M3: T�ch h?p MapLibre, Clustering pin (theo rating), k�o th? t?i v�ng debounce, bottom sheet, c?p quy?n v? tr�, BottomNav | (hash) |
+| 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged |
+| 2026-10-06 | Codex | Sửa tương thích API react-map-gl/maplibre 8.1.3 + maplibre-gl 6.12.0; lint/tsc/test/build local pass. Kiểm tra tay + CI xanh còn chờ. | pending |

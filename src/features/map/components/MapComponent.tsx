@@ -1,15 +1,16 @@
 "use client";
 
 import React, { useState, useCallback, useMemo } from "react";
-import Map, { Source, Layer, MapRef, ViewStateChangeEvent } from "react-map-gl/maplibre";
-import type { CircleLayer, SymbolLayer } from "react-map-gl/maplibre";
+import Map, { Source, Layer, MapRef, ViewStateChangeEvent, AttributionControl } from "react-map-gl/maplibre";
+import type { CircleLayerSpecification, SymbolLayerSpecification } from "react-map-gl/maplibre";
+import { GeoJSONSource } from "maplibre-gl";
 import { useRestaurantsInBounds, RestaurantPin } from "../hooks/useRestaurantsInBounds";
 import { useTranslations } from "next-intl";
 
 const MAP_STYLE = process.env.NEXT_PUBLIC_MAP_STYLE_URL;
 
 // Tầng cấu hình cho cluster circles
-const clusterLayer: CircleLayer = {
+const clusterLayer: CircleLayerSpecification = {
   id: "clusters",
   type: "circle",
   source: "restaurants",
@@ -36,7 +37,7 @@ const clusterLayer: CircleLayer = {
   }
 };
 
-const clusterCountLayer: SymbolLayer = {
+const clusterCountLayer: SymbolLayerSpecification = {
   id: "cluster-count",
   type: "symbol",
   source: "restaurants",
@@ -49,7 +50,7 @@ const clusterCountLayer: SymbolLayer = {
 };
 
 // Tầng pin lẻ: Đỏ (<4.0), Vàng (4.0-4.5), Xanh (>4.5)
-const unclusteredPointLayer: CircleLayer = {
+const unclusteredPointLayer: CircleLayerSpecification = {
   id: "unclustered-point",
   type: "circle",
   source: "restaurants",
@@ -105,30 +106,34 @@ export function MapComponent() {
     }
   }, [fetchInBounds]);
 
-  const onClick = useCallback((event: import("react-map-gl/maplibre").MapLayerMouseEvent) => {
+  const onClick = useCallback(async (event: import("react-map-gl/maplibre").MapLayerMouseEvent) => {
     const feature = event.features?.[0];
     if (!feature) {
       setSelectedPin(null);
       return;
     }
     const clusterId = feature.properties?.cluster_id;
-    if (clusterId) {
-      const source = mapRef.current?.getSource("restaurants") as import("maplibre-gl").GeoJSONSource;
-      source.getClusterExpansionZoom(clusterId, (err: Error | null | undefined, zoom: number) => {
-        if (err) return;
-        const coords = feature.geometry.coordinates;
-        mapRef.current?.easeTo({
-          center: [coords[0], coords[1]],
-          zoom,
-          duration: 500
-        });
-      });
+    if (typeof clusterId === "number" && Number.isFinite(clusterId)) {
+      const source = mapRef.current?.getSource("restaurants");
+      if (!(source instanceof GeoJSONSource)) return;
+      try {
+        const zoom = await source.getClusterExpansionZoom(clusterId);
+        if (feature.geometry.type === "Point") {
+          const coords = feature.geometry.coordinates;
+          mapRef.current?.easeTo({
+            center: [coords[0], coords[1]],
+            zoom,
+            duration: 500
+          });
+        }
+      } catch {
+        // ignore
+      }
       return;
     }
-    if (feature.properties) {
-      setSelectedPin(feature.properties as RestaurantPin);
-    }
-  }, []);
+    const pin = restaurants.find(restaurant => restaurant.id === feature.properties?.id);
+    if (pin) setSelectedPin(pin);
+  }, [restaurants]);
 
   const locateUser = () => {
     if (!navigator.geolocation) {
@@ -181,7 +186,6 @@ export function MapComponent() {
         mapStyle={MAP_STYLE}
         interactiveLayerIds={["clusters", "unclustered-point"]}
         onClick={onClick}
-        attributionControl={true}
         style={{ width: "100%", height: "100%" }}
       >
         <Source
@@ -196,6 +200,7 @@ export function MapComponent() {
           <Layer {...clusterCountLayer} />
           <Layer {...unclusteredPointLayer} />
         </Source>
+        <AttributionControl position="bottom-right" />
       </Map>
 
       {/* Nút vị trí */}

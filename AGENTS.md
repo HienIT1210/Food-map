@@ -24,6 +24,7 @@ Nếu `docs/PROGRESS.md` mâu thuẫn với trạng thái thật của code, **t
 
 1. Chạy kiểm tra: lint, type-check, test (lệnh ở mục 4).
 2. **Cập nhật `docs/PROGRESS.md`**: việc đã xong, việc đang dở (file nào, dở chỗ nào, vì sao), 3 bước tiếp theo cụ thể, quyết định/giả định mới, thêm một dòng vào "Nhật ký bàn giao".
+- Không báo hoàn thành khi chưa chạy cả bốn lệnh này và CI xanh
 3. **Commit**. Nếu công việc chưa xong nhưng bạn sắp hết hạn mức hoặc phải dừng, vẫn commit với tiền tố `wip:` và ghi rõ chỗ dở trong PROGRESS.md. Tuyệt đối không để công việc dở mà không ghi lại.
 
 Commit nhỏ, mỗi commit một việc, theo Conventional Commits (`feat:`, `fix:`, `chore:`, `test:`, `docs:`, `wip:`).
