@@ -48,5 +48,23 @@
   "demo": {
     "guestActionNotice": "Hành động này yêu cầu đăng nhập. Thử bấm để kiểm tra tính năng Guest Mode!",
     "writeReviewBtn": "Viết review (Hành động ghi)"
+  },
+  "map": {
+    "locationNotSupported": "Trình duyệt không hỗ trợ định vị.",
+    "locationDenied": "Không thể lấy vị trí. Vui lòng cấp quyền vị trí trong trình duyệt.",
+    "missingStyleUrl": "Thiếu biến môi trường NEXT_PUBLIC_MAP_STYLE_URL cho bản đồ.",
+    "filters": {
+      "openNow": "Đang mở cửa",
+      "dishType": "Loại món"
+    },
+    "myLocation": "Vị trí của tôi",
+    "reviews": "đánh giá",
+    "viewDetails": "Xem chi tiết"
+  },
+  "nav": {
+    "map": "Bản đồ",
+    "list": "Danh sách",
+    "saved": "Đã lưu",
+    "profile": "Tôi"
   }
 }

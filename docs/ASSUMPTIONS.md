@@ -13,3 +13,4 @@ Agent ghi các giả định đã tự chọn (kèm lý do ngắn và ngày) và
 | 2026-10-04 | Xóa tài khoản (AUTH-04): thực hiện qua Edge Function `delete-account` sử dụng service role để gọi `auth.admin.deleteUser()`, kích hoạt cascade xóa profiles và reviews | Tuân thủ bảo mật, không để lộ service role key ra client | Antigravity |
 
 - M1: Giả định rằng Supabase trên môi trường CI và production hỗ trợ thiết lập `security_invoker = off` (hoặc cú pháp `with (security_invoker = off)`) cho view để kích hoạt quyền truy cập bằng quyền sở hữu, phục vụ cho view `public_reviews`. Giả định `unaccent` và `pg_trgm` được phép cài đặt vào schema `extensions`.
+- M3 Map: Pin d?i m�u theo di?m s? d�nh gi� (d? < 4.0, v�ng 4.0 - 4.5, xanh > 4.5). Clustering s? d?ng eact-map-gl v?i Source GeoJSON cluster=true.

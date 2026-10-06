@@ -8,21 +8,21 @@
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M2 — hoàn tất xác thực, hồ sơ, xóa tài khoản
+- **Milestone đang làm:** M3 — hoàn tất Bản đồ, Clustering, Bottom Sheet, Filter.
 - **Tình trạng:**
-  - Hoàn thiện luồng Xác thực M2 (Đăng nhập Google/Email, Chế độ khách không cho ghi, Profile UI, Xoá tài khoản qua Edge Function).
-  - Component `LoginModal`, `ProfileView`, hooks `useAuth` đã hoạt động tốt với `@supabase/ssr` (`createServerClient`, `createBrowserClient`).
-  - Edge function `delete-account` đã được cấu hình JWT validation và Admin Auth.
-  - Test pgTAP (M2) 4/4 assertions cho Auth trigger `handle_new_user` đã pass xanh trên CI.
+  - `seed-cloud.sql` đã được tạo để test 30 quán hư cấu, chạy trong CI.
+  - UI Bản đồ tích hợp với `react-map-gl/maplibre`.
+  - RPC `restaurants_in_bounds` được gọi qua hook với debounce 300ms và `AbortController`.
+  - Các state/chức năng bản đồ đáp ứng đủ yêu cầu của M3.
 - **Nhánh git đang dùng:** `main`
-- **Tình trạng:** Sẵn sàng chuyển sang M3 (Bản đồ, MapLibre).
+- **Tình trạng:** M3 hoàn tất. Sẵn sàng cho M4.
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
 - [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
-- [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
+- [x] M3 — Bản đồ, clustering, thẻ quán, bộ lọc
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
 - [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
@@ -41,9 +41,9 @@
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Bắt đầu M3 (Cài đặt MapLibre GL JS).
-2. Tích hợp UI bản đồ toàn màn hình (MAP-01).
-3. Triển khai tải quán theo vùng (MAP-02).
+1. Bắt đầu M4 (Tìm kiếm có dấu/không dấu, thuật toán trigram).
+2. Tích hợp thanh tìm kiếm trên giao diện Bản đồ (SRCH-01, SRCH-02).
+3. Xây dựng trang chi tiết quán (RES-01).
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -102,4 +102,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-05 | Antigravity | fix(ci): dọn auth.users + cấp lại default privileges trên public trong mô phỏng Cloud; bổ sung kiểm chứng RLS vs permission denied | [pending] |
 | 2026-10-05 | Người dùng (tự cập nhật) | Xác nhận M1: CI xanh (20 test), đã `supabase db push` lên cloud, RLS bật ở mọi bảng, trigger tạo hồ sơ có mặt | (hash commit mới nhất) |
 | 2026-10-05 | GitHub Copilot | M1 security follow-up: T5 fixture riêng, 22 assertions mới, migration hardening; PR #2 CI xanh ở run #28 | `71e841c` |
-| 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged |
+| 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged || 2026-10-06 | Antigravity | M3: T�ch h?p MapLibre, Clustering pin (theo rating), k�o th? t?i v�ng debounce, bottom sheet, c?p quy?n v? tr�, BottomNav | (hash) |

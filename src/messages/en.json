@@ -48,5 +48,23 @@
   "demo": {
     "guestActionNotice": "This action requires an account. Try clicking to test Guest Mode gating!",
     "writeReviewBtn": "Write a Review (Write Action)"
+  },
+  "map": {
+    "locationNotSupported": "Browser does not support geolocation.",
+    "locationDenied": "Could not get location. Please grant location permission in your browser.",
+    "missingStyleUrl": "Missing NEXT_PUBLIC_MAP_STYLE_URL environment variable.",
+    "filters": {
+      "openNow": "Open Now",
+      "dishType": "Dish Type"
+    },
+    "myLocation": "My Location",
+    "reviews": "reviews",
+    "viewDetails": "View Details"
+  },
+  "nav": {
+    "map": "Map",
+    "list": "List",
+    "saved": "Saved",
+    "profile": "Me"
   }
 }

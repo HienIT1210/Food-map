@@ -58,5 +58,10 @@ jobs:
             echo "Applying seed with PGOPTIONS='-c search_path=public'..."
             docker exec -e PGOPTIONS="-c search_path=public" -i $CONTAINER psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seed.sql
           fi
+          # Apply seed-cloud
+          if [ -f supabase/seed-cloud.sql ]; then
+            echo "Applying seed-cloud with PGOPTIONS='-c search_path=public'..."
+            docker exec -e PGOPTIONS="-c search_path=public" -i $CONTAINER psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/seed-cloud.sql
+          fi
       - name: Run pgTAP / RLS tests
         run: supabase test db

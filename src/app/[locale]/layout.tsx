@@ -6,6 +6,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { AppProviders } from "@/components/providers/AppProviders";
+import { BottomNav } from "@/components/ui/BottomNav";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -69,9 +70,12 @@ export default async function LocaleLayout({
       lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-background text-foreground">
+      <body className="flex min-h-full flex-col bg-background text-foreground pb-16">
         <NextIntlClientProvider>
-          <AppProviders>{children}</AppProviders>
+          <AppProviders>
+            {children}
+            <BottomNav />
+          </AppProviders>
         </NextIntlClientProvider>
       </body>
     </html>
