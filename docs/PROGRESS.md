@@ -8,19 +8,19 @@
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M3 — Bản đồ, clustering, thẻ quán, bộ lọc (đang xác minh DoD)
-- **Tình trạng:** Code M3 hiện có MapLibre toàn màn hình, hook tải quán theo vùng có debounce/AbortController, clustering, pin, định vị, thẻ quán, BottomNav, filter chips; `supabase/seed-cloud.sql` và `supabase/tests/03_seed_cloud_test.sql` đã có.
-  - Nguyên nhân bản đồ trắng: với `maplibre-gl` v6 qua bundler, worker không tự được tìm thấy. Đã thêm `postinstall` copy `maplibre-gl-worker.mjs` và `maplibre-gl-shared.mjs` từ `node_modules` vào `public/maplibre/`; generated files bị gitignore. `setWorkerUrl` gọi một lần ở client, URL gắn version để tránh cache worker cũ; proxy bỏ qua `/maplibre/*` và có test matcher. Attribution control vẫn hiển thị. Lưu ý: khi nâng `maplibre-gl`, worker phải được copy lại (tự chạy qua postinstall).
-  - `npm run lint`, `npx tsc --noEmit`, `npm test` (3 files / 8 tests) và `npm run build` đều pass trên máy; kiểm tra tương tác tay còn chờ. CI cho commit `92249b0`: hai job `Lint, type-check, test, build` và `Database (M1+)` đều success (run 37616916247).
-- **Nhánh git đang dùng:** `main`
-- **Tình trạng:** M3 đã sửa lỗi worker và test proxy; bốn lệnh cục bộ pass; CI commit `92249b0` xanh cả hai job. Thao tác tay trên cài đặt sạch còn chờ; chưa chuyển M4.
+- **Milestone đang làm:** M3 — bản đồ, bộ lọc, vùng đang xem và danh sách.
+- **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
+- **Đang hoàn thiện:** Bộ lọc có RPC thật; nút tìm vùng mới; list view dùng vùng hiện tại; kiểm thử SQL cho bộ lọc.
+- **Giới hạn dữ liệu:** Schema hiện không có giờ mở cửa nên chưa có chip “Đang mở cửa”. Migration mới cần `supabase db push` lên cloud; không sửa migration đã áp dụng.
+- **Kiểm tra:** `npm run lint`, `npx tsc --noEmit`, `npm test` (4 files / 11 tests), `npm run build` đều pass. CI sau commit đang chờ.
+- **Nhánh:** `main`. Chưa chuyển M4.
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
 - [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
-- [ ] M3 — Bản đồ, clustering, thẻ quán, bộ lọc (code xong; kiểm tra tay + CI còn thiếu)
+- [ ] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (CI + kiểm tra tay còn chờ)
 - [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
 - [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
@@ -30,16 +30,16 @@
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** Xác minh M3 bằng thao tác thủ công và xác nhận CI xanh.
-- **File liên quan:** `src/features/map/components/MapComponent.tsx`, `docs/PROGRESS.md`.
-- **Dở ở chỗ nào / vì sao dừng:** Chưa xác nhận worker HTTP 200 và tương tác kéo/zoom, từ chối vị trí sau cài đặt sạch. CI của commit code đã xanh.
+- **Việc:** Hoàn tất kiểm chứng M3 sau khi áp dụng migration.
+- **File liên quan:** `src/features/map/`, `src/components/ui/BottomNav.tsx`, `supabase/migrations/20261007120000_map_filters_and_list_fields.sql`.
+- **Dở ở đâu:** Chưa `supabase db push` lên cloud và chưa thao tác lại trên trình duyệt sau thay đổi.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Chạy app sau `npm ci`, xác nhận hai worker URL trả HTTP 200 và bản đồ hiển thị.
-2. Thử kéo/zoom và từ chối quyền vị trí để xác minh DoD M3.
-3. Cập nhật DoD M3 từ kiểm tra tay; chưa bắt đầu M4.
+1. Xem CI `verify` và `database` sau khi push migration.
+2. Chạy `supabase db push` lên cloud để cài RPC lọc và trường loại món/tỉnh.
+3. Thử trên trình duyệt: lọc, Find this area, Map/List và từ chối vị trí; chưa chuyển M4.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -80,6 +80,7 @@ E2E:             npx playwright test     # chưa cài; M9
 - `set local search_path` là utility statement, tách thành lệnh riêng biệt với câu lệnh SELECT test.
 
 ## 8. Vấn đề / bug đã biết
+- M3: không có cột giờ mở cửa; chip “Đang mở cửa” chưa áp dụng cho dữ liệu hiện tại. Bộ lọc và metadata danh sách được thêm bằng migration mới; phải chạy `supabase db push` trên cloud.
 
 - M3: chưa kiểm tra thủ công kéo/zoom và từ chối quyền vị trí; CI cho commit `92249b0` xanh ở cả hai job (run 37616916247). Chưa xác nhận lại thủ công trên phiên bản postinstall; chưa chuyển M4.
 - Worker MapLibre là asset sinh tự động trong `public/maplibre`; sau khi nâng `maplibre-gl`, `postinstall` cần copy lại hai file worker/shared.
@@ -104,3 +105,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged |
 | 2026-10-06 | Codex | Sửa tương thích API react-map-gl/maplibre 8.1.3 + maplibre-gl 6.12.0; lint/tsc/test/build local pass. Kiểm tra tay + CI xanh còn chờ. | `d9ba42d` |
 | 2026-10-07 | Codex | Sửa worker trắng MapLibre v6: postinstall copy hai module, client setWorkerUrl một chỗ có version query, proxy bỏ qua `/maplibre/*` có test. Generated worker bị gitignore. Bốn lệnh local pass; CI run 37616916247 success ở cả hai job; kiểm tra tay sau install sạch còn chờ. | `92249b0` |
+| 2026-10-07 | Codex | M3: bộ lọc RPC, list view, find-area, BottomNav Map/List, unit + pgTAP tests; migration mới cần cloud db push. Chưa chuyển M4. | pending |

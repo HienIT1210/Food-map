@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { AppProviders } from "@/components/providers/AppProviders";
 import { BottomNav } from "@/components/ui/BottomNav";
+import { MapViewProvider } from "@/features/map/components/MapViewContext";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -72,10 +73,12 @@ export default async function LocaleLayout({
     >
       <body className="flex min-h-full flex-col bg-background text-foreground pb-16">
         <NextIntlClientProvider>
-          <AppProviders>
-            {children}
-            <BottomNav />
-          </AppProviders>
+          <MapViewProvider>
+            <AppProviders>
+              {children}
+              <BottomNav />
+            </AppProviders>
+          </MapViewProvider>
         </NextIntlClientProvider>
       </body>
     </html>

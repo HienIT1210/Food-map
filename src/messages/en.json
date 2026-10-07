@@ -55,8 +55,22 @@
     "missingStyleUrl": "Missing NEXT_PUBLIC_MAP_STYLE_URL environment variable.",
     "filters": {
       "openNow": "Open Now",
-      "dishType": "Dish Type"
+      "maxPrice": "Price",
+      "anyPrice": "Any price",
+      "underPrice": "Under {amount} VND",
+      "minRating": "4+ stars",
+      "dishType": "Dish Type",
+      "province": "Province/city"
     },
+    "findThisArea": "Search this area",
+    "listTitle": "Places in the current area",
+    "loading": "Loading places…",
+    "loadError": "Could not load places.",
+    "emptyList": "No places in this area yet.",
+    "retry": "Try again",
+    "noDishTypes": "No dish type listed",
+    "distanceMeters": "{distance} m",
+    "distanceKilometers": "{distance} km",
     "myLocation": "My Location",
     "reviews": "reviews",
     "viewDetails": "View Details"

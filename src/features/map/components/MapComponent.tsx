@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import Map, { Source, Layer, MapRef, ViewStateChangeEvent, AttributionControl } from "react-map-gl/maplibre";
 import type { CircleLayerSpecification, SymbolLayerSpecification } from "react-map-gl/maplibre";
 import { GeoJSONSource, getVersion, setWorkerUrl } from "maplibre-gl";
 import { useRestaurantsInBounds, RestaurantPin } from "../hooks/useRestaurantsInBounds";
-import { useTranslations } from "next-intl";
+import { useMapView } from "./MapViewContext";
+import {
+  distanceInMeters,
+  hasMovedOutsideLoadedBounds,
+  type MapBounds,
+  type MapFilters,
+} from "../map-utils";
+import { useFormatter, useTranslations } from "next-intl";
 
 if (typeof window !== "undefined") {
   setWorkerUrl(`/maplibre/maplibre-gl-worker.mjs?v=${getVersion()}`);
@@ -76,15 +83,28 @@ const unclusteredPointLayer: CircleLayerSpecification = {
 
 export function MapComponent() {
   const t = useTranslations("map");
-  const { restaurants, fetchInBounds, loading } = useRestaurantsInBounds();
+  const format = useFormatter();
+  const { mode, setMode } = useMapView();
+  const {
+    restaurants,
+    dishTypes,
+    provinces,
+    loadedBounds,
+    fetchInBounds,
+    loading,
+    error,
+  } = useRestaurantsInBounds();
   const mapRef = React.useRef<MapRef>(null);
 
   const [selectedPin, setSelectedPin] = useState<RestaurantPin | null>(null);
-  const [viewState, setViewState] = useState({
-    longitude: 106.68,
-    latitude: 10.78,
-    zoom: 12
+  const [filters, setFilters] = useState<MapFilters>({
+    minRating: null,
+    maxPrice: null,
+    dishType: null,
+    province: null,
   });
+  const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   
   // Dữ liệu GeoJSON
   const geojsonSource = useMemo(() => {
@@ -101,14 +121,45 @@ export function MapComponent() {
     };
   }, [restaurants]);
 
+  const readBounds = useCallback((e: ViewStateChangeEvent | undefined): MapBounds | null => {
+    const bounds = e?.target.getBounds() ?? mapRef.current?.getBounds();
+    if (!bounds) return null;
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    return { minLat: sw.lat, minLng: sw.lng, maxLat: ne.lat, maxLng: ne.lng };
+  }, []);
+
   const onMoveEnd = useCallback((e: ViewStateChangeEvent) => {
-    const bounds = e.target.getBounds();
+    const bounds = readBounds(e);
+    if (bounds) setCurrentBounds(bounds);
+  }, [readBounds]);
+
+  const onMapLoad = useCallback(() => {
+    const bounds = readBounds(undefined);
     if (bounds) {
-      const sw = bounds.getSouthWest();
-      const ne = bounds.getNorthEast();
-      fetchInBounds(sw.lat, sw.lng, ne.lat, ne.lng);
+      setCurrentBounds(bounds);
+      fetchInBounds(bounds, filters);
     }
-  }, [fetchInBounds]);
+  }, [fetchInBounds, filters, readBounds]);
+
+  const updateFilters = useCallback((nextFilters: MapFilters) => {
+    setFilters(nextFilters);
+    if (currentBounds) fetchInBounds(currentBounds, nextFilters);
+  }, [currentBounds, fetchInBounds]);
+
+  const onFindThisArea = useCallback(() => {
+    if (currentBounds) fetchInBounds(currentBounds, filters);
+  }, [currentBounds, fetchInBounds, filters]);
+
+  const onRetry = useCallback(() => {
+    if (currentBounds) fetchInBounds(currentBounds, filters);
+  }, [currentBounds, fetchInBounds, filters]);
+
+  useEffect(() => {
+    if (mode === "list" && hasMovedOutsideLoadedBounds(currentBounds, loadedBounds) && currentBounds) {
+      fetchInBounds(currentBounds, filters);
+    }
+  }, [currentBounds, fetchInBounds, filters, loadedBounds, mode]);
 
   const onClick = useCallback(async (event: import("react-map-gl/maplibre").MapLayerMouseEvent) => {
     const feature = event.features?.[0];
@@ -146,6 +197,7 @@ export function MapComponent() {
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         mapRef.current?.flyTo({
           center: [pos.coords.longitude, pos.coords.latitude],
           zoom: 15
@@ -155,6 +207,16 @@ export function MapComponent() {
         alert(t("locationDenied"));
       }
     );
+  };
+
+  const selectRestaurant = useCallback((restaurant: RestaurantPin) => {
+    setSelectedPin(restaurant);
+    mapRef.current?.flyTo({ center: [restaurant.lng, restaurant.lat], zoom: 15 });
+    setMode("map");
+  }, [setMode]);
+
+  const toggleRatingFilter = () => {
+    updateFilters({ ...filters, minRating: filters.minRating === null ? 4 : null });
   };
 
   if (!MAP_STYLE) {
@@ -168,24 +230,54 @@ export function MapComponent() {
   }
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] w-full">
-      {/* Bộ lọc dạng chip (Demo tĩnh) */}
-      <div className="absolute top-4 left-4 right-16 z-10 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        <button className="whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-medium shadow-md">
-          ⭐ 4.0+
+    <div className="relative h-[calc(100dvh-4rem)] w-full">
+      <div className="absolute left-3 right-3 top-3 z-20 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <label className="sr-only" htmlFor="map-price-filter">{t("filters.maxPrice")}</label>
+        <select
+          id="map-price-filter"
+          className="min-h-10 shrink-0 rounded-full border border-zinc-200 bg-white px-3 text-sm shadow-md dark:bg-zinc-900"
+          value={filters.maxPrice ?? ""}
+          onChange={(event) => updateFilters({ ...filters, maxPrice: event.target.value ? Number(event.target.value) : null })}
+        >
+          <option value="">{t("filters.anyPrice")}</option>
+          <option value="50000">{t("filters.underPrice", { amount: format.number(50000) })}</option>
+          <option value="100000">{t("filters.underPrice", { amount: format.number(100000) })}</option>
+          <option value="200000">{t("filters.underPrice", { amount: format.number(200000) })}</option>
+        </select>
+        <button
+          type="button"
+          aria-pressed={filters.minRating !== null}
+          onClick={toggleRatingFilter}
+          className={`min-h-10 shrink-0 rounded-full px-4 text-sm font-medium shadow-md ${filters.minRating !== null ? "bg-blue-600 text-white" : "bg-white dark:bg-zinc-900"}`}
+        >
+          ⭐ {t("filters.minRating")}
         </button>
-        <button className="whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-medium shadow-md">
-          {t("filters.openNow")}
-        </button>
-        <button className="whitespace-nowrap rounded-full bg-white px-4 py-1.5 text-sm font-medium shadow-md">
-          {t("filters.dishType")}
-        </button>
+        <label className="sr-only" htmlFor="map-dish-filter">{t("filters.dishType")}</label>
+        <select
+          id="map-dish-filter"
+          className="min-h-10 shrink-0 rounded-full border border-zinc-200 bg-white px-3 text-sm shadow-md dark:bg-zinc-900"
+          value={filters.dishType ?? ""}
+          onChange={(event) => updateFilters({ ...filters, dishType: event.target.value || null })}
+        >
+          <option value="">{t("filters.dishType")}</option>
+          {dishTypes.map((dishType) => <option key={dishType} value={dishType}>{dishType}</option>)}
+        </select>
+        <label className="sr-only" htmlFor="map-province-filter">{t("filters.province")}</label>
+        <select
+          id="map-province-filter"
+          className="min-h-10 shrink-0 rounded-full border border-zinc-200 bg-white px-3 text-sm shadow-md dark:bg-zinc-900"
+          value={filters.province ?? ""}
+          onChange={(event) => updateFilters({ ...filters, province: event.target.value || null })}
+        >
+          <option value="">{t("filters.province")}</option>
+          {provinces.map((province) => <option key={province} value={province}>{province}</option>)}
+        </select>
       </div>
 
       <Map
         ref={mapRef}
-        {...viewState}
-        onMove={evt => setViewState(evt.viewState)}
+        initialViewState={{ longitude: 106.68, latitude: 10.78, zoom: 12 }}
+        onLoad={onMapLoad}
         onMoveEnd={onMoveEnd}
         mapStyle={MAP_STYLE}
         interactiveLayerIds={["clusters", "unclustered-point"]}
@@ -206,6 +298,58 @@ export function MapComponent() {
         </Source>
         <AttributionControl position="bottom-right" />
       </Map>
+
+      {hasMovedOutsideLoadedBounds(currentBounds, loadedBounds) && !loading && (
+        <button
+          type="button"
+          onClick={onFindThisArea}
+          className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg"
+        >
+          {t("findThisArea")}
+        </button>
+      )}
+
+      {mode === "list" && (
+        <section
+          aria-label={t("listTitle")}
+          className="absolute inset-x-0 bottom-0 top-14 z-10 overflow-y-auto bg-white/95 px-3 pb-5 pt-2 backdrop-blur-sm dark:bg-zinc-950/95"
+        >
+          <h2 className="sr-only">{t("listTitle")}</h2>
+          {loading && <p role="status" className="p-4 text-center text-sm">{t("loading")}</p>}
+          {error && (
+            <div role="alert" className="m-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              <p>{t("loadError")}</p>
+              <button type="button" onClick={onRetry} className="mt-2 font-semibold underline">{t("retry")}</button>
+            </div>
+          )}
+          {!loading && !error && restaurants.length === 0 && (
+            <p className="p-6 text-center text-sm text-zinc-600">{t("emptyList")}</p>
+          )}
+          <ul className="space-y-2">
+            {restaurants.map((restaurant) => {
+              const distance = userLocation ? distanceInMeters(userLocation, restaurant) : null;
+              return (
+                <li key={restaurant.id}>
+                  <button
+                    type="button"
+                    onClick={() => selectRestaurant(restaurant)}
+                    className="w-full rounded-xl border border-zinc-200 bg-white p-4 text-left shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                  >
+                    <span className="block font-semibold">{restaurant.name}</span>
+                    <span className="mt-1 block text-sm text-zinc-600 dark:text-zinc-300">
+                      {restaurant.dish_types.length ? restaurant.dish_types.join(" · ") : t("noDishTypes")}
+                    </span>
+                    <span className="mt-1 block text-sm text-zinc-600 dark:text-zinc-300">
+                      ⭐ {restaurant.avg_rating.toFixed(1)} · {restaurant.review_count} {t("reviews")}
+                      {distance !== null && ` · ${distance < 1000 ? t("distanceMeters", { distance: Math.round(distance) }) : t("distanceKilometers", { distance: (distance / 1000).toFixed(1) })}`}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* Nút vị trí */}
       <button
@@ -233,6 +377,14 @@ export function MapComponent() {
               <p className="text-sm text-zinc-500">
                 ⭐ {selectedPin.avg_rating} ({selectedPin.review_count} {t("reviews")})
               </p>
+              {selectedPin.dish_types.length > 0 && (
+                <p className="mt-1 text-sm text-zinc-500">{selectedPin.dish_types.join(" · ")}</p>
+              )}
+              {userLocation && (
+                <p className="mt-1 text-sm text-zinc-500">
+                  {t("distanceMeters", { distance: Math.round(distanceInMeters(userLocation, selectedPin)) })}
+                </p>
+              )}
             </div>
             <button
               onClick={() => setSelectedPin(null)}
@@ -241,9 +393,6 @@ export function MapComponent() {
               ✕
             </button>
           </div>
-          <button className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700">
-            {t("viewDetails")}
-          </button>
         </div>
       )}
     </div>

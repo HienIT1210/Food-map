@@ -55,8 +55,22 @@
     "missingStyleUrl": "Thiếu biến môi trường NEXT_PUBLIC_MAP_STYLE_URL cho bản đồ.",
     "filters": {
       "openNow": "Đang mở cửa",
-      "dishType": "Loại món"
+      "maxPrice": "Mức giá",
+      "anyPrice": "Mọi mức giá",
+      "underPrice": "Dưới {amount} đồng",
+      "minRating": "Từ 4 sao",
+      "dishType": "Loại món",
+      "province": "Tỉnh/thành"
     },
+    "findThisArea": "Tìm ở khu vực này",
+    "listTitle": "Quán trong khu vực đang xem",
+    "loading": "Đang tải quán…",
+    "loadError": "Không tải được danh sách quán.",
+    "emptyList": "Chưa có quán trong khu vực này.",
+    "retry": "Thử lại",
+    "noDishTypes": "Chưa có loại món",
+    "distanceMeters": "{distance} m",
+    "distanceKilometers": "{distance} km",
     "myLocation": "Vị trí của tôi",
     "reviews": "đánh giá",
     "viewDetails": "Xem chi tiết"
