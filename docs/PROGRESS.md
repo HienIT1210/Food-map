@@ -11,9 +11,9 @@
 - **Milestone đang làm:** M3 — Bản đồ, clustering, thẻ quán, bộ lọc (đang xác minh DoD)
 - **Tình trạng:** Code M3 hiện có MapLibre toàn màn hình, hook tải quán theo vùng có debounce/AbortController, clustering, pin, định vị, thẻ quán, BottomNav, filter chips; `supabase/seed-cloud.sql` và `supabase/tests/03_seed_cloud_test.sql` đã có.
   - Nguyên nhân bản đồ trắng: với `maplibre-gl` v6 qua bundler, worker không tự được tìm thấy. Đã thêm `postinstall` copy `maplibre-gl-worker.mjs` và `maplibre-gl-shared.mjs` từ `node_modules` vào `public/maplibre/`; generated files bị gitignore. `setWorkerUrl` gọi một lần ở client, URL gắn version để tránh cache worker cũ; proxy bỏ qua `/maplibre/*` và có test matcher. Attribution control vẫn hiển thị. Lưu ý: khi nâng `maplibre-gl`, worker phải được copy lại (tự chạy qua postinstall).
-  - `npm run lint`, `npx tsc --noEmit`, `npm test` (3 files / 8 tests) và `npm run build` đều pass trên máy; kiểm tra tương tác tay còn chờ. CI sau push chờ hai job `verify` và `database`.
+  - `npm run lint`, `npx tsc --noEmit`, `npm test` (3 files / 8 tests) và `npm run build` đều pass trên máy; kiểm tra tương tác tay còn chờ. CI cho commit `92249b0`: hai job `Lint, type-check, test, build` và `Database (M1+)` đều success (run 37616916247).
 - **Nhánh git đang dùng:** `main`
-- **Tình trạng:** Code M3 và bốn kiểm tra cục bộ hoàn tất; DoD thao tác tay và CI chưa được xác minh, chưa chuyển M4.
+- **Tình trạng:** M3 đã sửa lỗi worker và test proxy; bốn lệnh cục bộ pass; CI commit `92249b0` xanh cả hai job. Thao tác tay trên cài đặt sạch còn chờ; chưa chuyển M4.
 
 ## 2. Tiến độ milestone
 
@@ -32,14 +32,14 @@
 
 - **Việc:** Xác minh M3 bằng thao tác thủ công và xác nhận CI xanh.
 - **File liên quan:** `src/features/map/components/MapComponent.tsx`, `docs/PROGRESS.md`.
-- **Dở ở chỗ nào / vì sao dừng:** Chưa thử kéo/zoom và từ chối quyền vị trí trên trình duyệt; chưa có bằng chứng CI xanh sau sửa API.
+- **Dở ở chỗ nào / vì sao dừng:** Chưa xác nhận worker HTTP 200 và tương tác kéo/zoom, từ chối vị trí sau cài đặt sạch. CI của commit code đã xanh.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Mở app với `NEXT_PUBLIC_MAP_STYLE_URL`, xác nhận kéo/zoom tải đúng quán.
-2. Từ chối quyền vị trí, xác nhận bản đồ tiếp tục dùng được.
-3. Xác nhận CI xanh và cập nhật trạng thái DoD M3; chưa bắt đầu M4.
+1. Chạy app sau `npm ci`, xác nhận hai worker URL trả HTTP 200 và bản đồ hiển thị.
+2. Thử kéo/zoom và từ chối quyền vị trí để xác minh DoD M3.
+3. Cập nhật DoD M3 từ kiểm tra tay; chưa bắt đầu M4.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -81,7 +81,7 @@ E2E:             npx playwright test     # chưa cài; M9
 
 ## 8. Vấn đề / bug đã biết
 
-- M3: chưa kiểm tra thủ công kéo/zoom và từ chối quyền vị trí; CI sau thay đổi worker đang chờ. Chưa chuyển M4.
+- M3: chưa kiểm tra thủ công kéo/zoom và từ chối quyền vị trí; CI cho commit `92249b0` xanh ở cả hai job (run 37616916247). Chưa xác nhận lại thủ công trên phiên bản postinstall; chưa chuyển M4.
 - Worker MapLibre là asset sinh tự động trong `public/maplibre`; sau khi nâng `maplibre-gl`, `postinstall` cần copy lại hai file worker/shared.
 
 - `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này.
@@ -103,4 +103,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-05 | GitHub Copilot | M1 security follow-up: T5 fixture riêng, 22 assertions mới, migration hardening; PR #2 CI xanh ở run #28 | `71e841c` |
 | 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged |
 | 2026-10-06 | Codex | Sửa tương thích API react-map-gl/maplibre 8.1.3 + maplibre-gl 6.12.0; lint/tsc/test/build local pass. Kiểm tra tay + CI xanh còn chờ. | `d9ba42d` |
-| 2026-10-07 | Codex | Sửa worker trắng MapLibre v6: postinstall copy hai module, client setWorkerUrl một chỗ có version query, proxy bỏ qua `/maplibre/*` có test. Generated worker bị gitignore. Bốn lệnh local pass; kiểm tra tay và CI (2 jobs) chờ. | pending |
+| 2026-10-07 | Codex | Sửa worker trắng MapLibre v6: postinstall copy hai module, client setWorkerUrl một chỗ có version query, proxy bỏ qua `/maplibre/*` có test. Generated worker bị gitignore. Bốn lệnh local pass; CI run 37616916247 success ở cả hai job; kiểm tra tay sau install sạch còn chờ. | `92249b0` |
