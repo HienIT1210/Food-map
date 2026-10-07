@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "coverage/**",
+    "public/maplibre/**",
     "next-env.d.ts",
     "supabase/.temp/**",
     "supabase/.branches/**",

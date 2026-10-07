@@ -2,7 +2,7 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-06 bởi Codex
+**Cập nhật lần cuối:** 2026-10-07 bởi Codex
 
 ---
 
@@ -10,8 +10,8 @@
 
 - **Milestone đang làm:** M3 — Bản đồ, clustering, thẻ quán, bộ lọc (đang xác minh DoD)
 - **Tình trạng:** Code M3 hiện có MapLibre toàn màn hình, hook tải quán theo vùng có debounce/AbortController, clustering, pin, định vị, thẻ quán, BottomNav, filter chips; `supabase/seed-cloud.sql` và `supabase/tests/03_seed_cloud_test.sql` đã có.
-  - Sửa type/API cho `react-map-gl` 8.1.3 và `maplibre-gl` 6.12.0; attribution control vẫn hiển thị.
-  - Bốn lệnh cục bộ pass; kiểm tra tương tác tay và CI xanh sau sửa chưa được xác nhận.
+  - Nguyên nhân bản đồ trắng: với `maplibre-gl` v6 qua bundler, worker không tự được tìm thấy. Đã thêm `postinstall` copy `maplibre-gl-worker.mjs` và `maplibre-gl-shared.mjs` từ `node_modules` vào `public/maplibre/`; generated files bị gitignore. `setWorkerUrl` gọi một lần ở client, URL gắn version để tránh cache worker cũ; proxy bỏ qua `/maplibre/*` và có test matcher. Attribution control vẫn hiển thị. Lưu ý: khi nâng `maplibre-gl`, worker phải được copy lại (tự chạy qua postinstall).
+  - `npm run lint`, `npx tsc --noEmit`, `npm test` (3 files / 8 tests) và `npm run build` đều pass trên máy; kiểm tra tương tác tay còn chờ. CI sau push chờ hai job `verify` và `database`.
 - **Nhánh git đang dùng:** `main`
 - **Tình trạng:** Code M3 và bốn kiểm tra cục bộ hoàn tất; DoD thao tác tay và CI chưa được xác minh, chưa chuyển M4.
 
@@ -81,6 +81,9 @@ E2E:             npx playwright test     # chưa cài; M9
 
 ## 8. Vấn đề / bug đã biết
 
+- M3: chưa kiểm tra thủ công kéo/zoom và từ chối quyền vị trí; CI sau thay đổi worker đang chờ. Chưa chuyển M4.
+- Worker MapLibre là asset sinh tự động trong `public/maplibre`; sau khi nâng `maplibre-gl`, `postinstall` cần copy lại hai file worker/shared.
+
 - `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này.
 - `next dev` tự thêm khối luật Next.js vào cuối `AGENTS.md`; nội dung luật repo gốc được giữ nguyên.
 - Deno Edge Functions trong `supabase/functions` được exclude khỏi `tsconfig.json` của Next.js để tránh xung đột kiểu type giữa Node và Deno.
@@ -99,4 +102,5 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-05 | Người dùng (tự cập nhật) | Xác nhận M1: CI xanh (20 test), đã `supabase db push` lên cloud, RLS bật ở mọi bảng, trigger tạo hồ sơ có mặt | (hash commit mới nhất) |
 | 2026-10-05 | GitHub Copilot | M1 security follow-up: T5 fixture riêng, 22 assertions mới, migration hardening; PR #2 CI xanh ở run #28 | `71e841c` |
 | 2026-10-05 | GitHub Copilot | Mutation checks 3(a)-3(c): T15-T18, T20, T21-T22 đỏ; PR #3 đóng không merge và nhánh mutation đã xóa; baseline khôi phục xanh run #32 | temporary commits not merged |
-| 2026-10-06 | Codex | Sửa tương thích API react-map-gl/maplibre 8.1.3 + maplibre-gl 6.12.0; lint/tsc/test/build local pass. Kiểm tra tay + CI xanh còn chờ. | pending |
+| 2026-10-06 | Codex | Sửa tương thích API react-map-gl/maplibre 8.1.3 + maplibre-gl 6.12.0; lint/tsc/test/build local pass. Kiểm tra tay + CI xanh còn chờ. | `d9ba42d` |
+| 2026-10-07 | Codex | Sửa worker trắng MapLibre v6: postinstall copy hai module, client setWorkerUrl một chỗ có version query, proxy bỏ qua `/maplibre/*` có test. Generated worker bị gitignore. Bốn lệnh local pass; kiểm tra tay và CI (2 jobs) chờ. | pending |

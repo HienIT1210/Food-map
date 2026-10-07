@@ -40,3 +40,6 @@ supabase/.temp/
 Thumbs.db
 *.log
 .idea/
+
+# Generated from the installed MapLibre GL JS version during postinstall
+/public/maplibre/*.mjs

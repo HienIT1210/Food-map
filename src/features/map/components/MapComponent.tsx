@@ -3,9 +3,13 @@
 import React, { useState, useCallback, useMemo } from "react";
 import Map, { Source, Layer, MapRef, ViewStateChangeEvent, AttributionControl } from "react-map-gl/maplibre";
 import type { CircleLayerSpecification, SymbolLayerSpecification } from "react-map-gl/maplibre";
-import { GeoJSONSource } from "maplibre-gl";
+import { GeoJSONSource, getVersion, setWorkerUrl } from "maplibre-gl";
 import { useRestaurantsInBounds, RestaurantPin } from "../hooks/useRestaurantsInBounds";
 import { useTranslations } from "next-intl";
+
+if (typeof window !== "undefined") {
+  setWorkerUrl(`/maplibre/maplibre-gl-worker.mjs?v=${getVersion()}`);
+}
 
 const MAP_STYLE = process.env.NEXT_PUBLIC_MAP_STYLE_URL;
 
