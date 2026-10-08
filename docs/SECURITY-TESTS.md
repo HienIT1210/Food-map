@@ -24,7 +24,7 @@ The implementation branch's full CI also passed in [Run #28](https://github.com/
 | T18 | 3(a) | Rejected self-ban leaves `is_banned = false` |
 | T19 | 3(a) | User-editable `display_name` remains writable |
 | T20 | 3(b) | B cannot insert a review with A's `user_id` |
-| T21 | 3(c) | `anon` reads no rows directly from `reviews` |
+| T21 | 3(c) | `anon` reads zero rows directly from `reviews` |
 | T22 | 3(c) | `anon` cannot insert a review |
 | T23 | 3(d) | A regular user cannot change `avg_rating` |
 | T24 | 3(d) | A regular user cannot change `review_count` |
@@ -37,7 +37,7 @@ The implementation branch's full CI also passed in [Run #28](https://github.com/
 | T35 | 3(g) | Anonymous review rejects a path containing the owner's UUID |
 | T36 | 3(g) | A review with an identifying photo path cannot be switched to anonymous |
 
-T5 now checks review UPDATE/DELETE isolation against its own fixture row, so a successful destructive mutation does not affect T8 or T14.
+T5 checks review UPDATE/DELETE isolation against its own fixture row so a successful destructive mutation does not affect T8 or T14.
 
 ## Repeat the Mutations
 
@@ -53,3 +53,26 @@ Apply only the selected mutation in the new migration, commit it, push the branc
 For 3(a), broaden the `profiles` UPDATE grant to table-level UPDATE. For 3(b), temporarily use `WITH CHECK (true)` on the review INSERT policy. For 3(c), add permissive `anon` SELECT and INSERT policies on `public.reviews`.
 
 The migration file `20261005100000_security_hardening.sql` is forward-only; after PR #2 is merged, apply it to Supabase Cloud with `npx supabase db push`.
+
+## Privilege and limit audit — 2026-10-08
+
+| Surface | Finding before this change | Remediation in the new migration |
+|---|---|---|
+| `check_restaurant_limits()` | `NEW.source = 'seed'` skipped counting; caller could backdate `NEW.created_at`; system columns could be spoofed. | Removed client-controlled bypass. Derives source from `auth.uid()`, canonicalizes `created_at`, status and counters, pins `created_by` to authenticated actor and counts that actor's rows. Trusted null-UID seed/admin inserts remain supported; `anon` has no insert grant. |
+| `check_review_limits()` | No caller-column bypass condition, but its daily window relied on writable `created_at`. | Counts by `NEW.user_id` (RLS binds it to `auth.uid()`), while grants and trigger prevent client timestamps. Trigger sets/preserves status, helpful count and timestamps. Trusted null-UID maintenance inserts skip the user limit. |
+| Other write-limit functions/triggers | Search of migrations found no other daily user-write limit trigger/function. `restaurants_in_bounds()` also accepted unbounded `lim` and had no stable order. | Bounds RPC clamps to 0–500 and orders by `r.id`. |
+| `restaurants` | Table-level grants exposed source, status, counters and created_at. | Revoke table INSERT/UPDATE; allow only `name`, `address`, `province`, `location`, `created_by`. |
+| `reviews` | Table-level grants exposed `helpful_count`, `status`, `created_at`, `updated_at`. | Revoke table INSERT/UPDATE; allow user review columns only and canonicalize system fields in a trigger. |
+| `reports` | Table-level grants exposed status and created_at. | Revoke table INSERT/UPDATE; allow user report fields on insert and reason on update; trigger owns status/timestamp. |
+| `review_photos` | Table-level writes included generated id and all row fields. | Revoke table INSERT/UPDATE; grant selected insert/update columns. |
+| `saved_items` | Table-level writes exposed created_at. | Revoke table INSERT/UPDATE; grant user fields only and canonicalize created_at. |
+| `blocks` | Table-level writes exposed key columns; there is no separate system metadata. | Revoke table INSERT/UPDATE; allow key-column inserts only. |
+
+## New regression coverage
+
+- `supabase/tests/05_security_privileges_test.sql`: 24 pgTAP assertions. Exploit attempts and privilege checks run as `authenticated`; setup/default inspection uses database owner. Covers `source='seed'`, backdated restaurants/reviews, forged restaurant metadata and system columns on the named tables.
+- `supabase/tests/06_map_bounds_security_test.sql`: 4 pgTAP assertions under `anon`; creates 501 fixtures and checks the cap, stable ordering, negative limit and execute grant.
+- Tests-first commit `5cf329f` is pushed to `security/m3-privilege-tests-first` before the hardening migration. The private Actions API returned 404 without credentials, `gh` is unavailable, and Docker daemon is stopped, so its database test result could not be collected locally. GitHub's push response suggested [creating a PR](https://github.com/HienIT1210/Food-map/pull/new/security/m3-privilege-tests-first).
+- A deliberate mutation run on a separate unmerged PR remains pending. Restore a table-wide grant or the `source='seed'` bypass and record the expected pgTAP failures; do not count the tests-first branch as mutation evidence.
+
+Run `supabase test db` on CI or with the local Supabase Docker stack running. No `supabase db push` was run; migration `20261008100000_harden_user_write_privileges.sql` remains unapplied to cloud.

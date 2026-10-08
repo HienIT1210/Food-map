@@ -122,11 +122,11 @@ select extensions.throws_ok(
   '42501', null, 'R10: authenticated cannot backdate a review to evade the daily limit'
 );
 select extensions.throws_ok(
-  $$insert into public.reviews (user_id, restaurant_id, rating, helpful_count) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 11'), 5, 100)$$,
+  $$insert into public.reviews (user_id, restaurant_id, rating, helpful_count) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 12'), 5, 100)$$,
   '42501', null, 'R11: authenticated cannot set review helpful_count'
 );
 select extensions.throws_ok(
-  $$insert into public.reviews (user_id, restaurant_id, rating, status) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 11'), 5, 'removed')$$,
+  $$insert into public.reviews (user_id, restaurant_id, rating, status) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 13'), 5, 'removed')$$,
   '42501', null, 'R12: authenticated cannot set review status'
 );
 select extensions.throws_ok(

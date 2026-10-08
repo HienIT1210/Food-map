@@ -2,17 +2,17 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-07 bởi Codex
+**Cập nhật lần cuối:** 2026-10-08 bởi Codex
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M3 — bản đồ, bộ lọc, vùng đang xem và danh sách.
+- **Milestone đang làm:** M3 — bản đồ, bộ lọc, vùng đang xem, danh sách và hardening bảo mật cơ sở dữ liệu.
 - **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
-- **Đang hoàn thiện:** Bộ lọc có RPC thật; nút tìm vùng mới; list view dùng vùng hiện tại; kiểm thử SQL cho bộ lọc.
+- **Đang hoàn thiện:** Hardening quyền ghi theo cột, trigger giới hạn, RPC bản đồ; pgTAP test-first có trên nhánh riêng. CI, mutation PR và kiểm tra tay còn chờ.
 - **Giới hạn dữ liệu:** Schema hiện không có giờ mở cửa nên chưa có chip “Đang mở cửa”. Migration mới cần `supabase db push` lên cloud; không sửa migration đã áp dụng.
-- **Kiểm tra:** `npm run lint`, `npx tsc --noEmit`, `npm test` (4 files / 11 tests), `npm run build` đều pass. CI sau commit đang chờ.
+- **Kiểm tra:** Lần chạy trước: lint, `npx tsc --noEmit`, `npm test` (4 files / 11 tests), `npm run build` pass. Đợt hardening mới chưa chạy bốn lệnh cuối; database tests chưa chạy do Docker daemon không hoạt động. CI status chưa truy vấn được.
 - **Nhánh:** `main`. Chưa chuyển M4.
 
 ## 2. Tiến độ milestone
@@ -30,16 +30,16 @@
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** Hoàn tất kiểm chứng M3 sau khi áp dụng migration.
-- **File liên quan:** `src/features/map/`, `src/components/ui/BottomNav.tsx`, `supabase/migrations/20261007120000_map_filters_and_list_fields.sql`.
-- **Dở ở đâu:** Chưa `supabase db push` lên cloud và chưa thao tác lại trên trình duyệt sau thay đổi.
+- **Việc:** Xác minh migration hardening và hoàn tất kiểm thử M3/M1 security follow-up.
+- **File liên quan:** `supabase/migrations/20261008100000_harden_user_write_privileges.sql`, `supabase/tests/05_security_privileges_test.sql`, `supabase/tests/06_map_bounds_security_test.sql`, `docs/SECURITY-TESTS.md`.
+- **Dở ở đâu:** Chưa chạy database tests bằng Docker/CI; chưa chạy mutation trên PR chưa merge; không chạy `supabase db push`; chưa thao tác tay M3.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Xem CI `verify` và `database` sau khi push migration.
-2. Chạy `supabase db push` lên cloud để cài RPC lọc và trường loại món/tỉnh.
-3. Thử trên trình duyệt: lọc, Find this area, Map/List và từ chối vị trí; chưa chuyển M4.
+1. Chạy bốn lệnh kiểm tra ứng dụng và xác minh migration/tests bằng database CI.
+2. Tạo mutation branch/PR riêng, kiểm tra pgTAP đỏ khi khôi phục quyền rộng/seed bypass; không merge PR đó.
+3. Chờ user chủ động `supabase db push` migration chưa áp dụng, rồi kiểm tra tay M3; chưa chuyển M4.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -81,6 +81,7 @@ E2E:             npx playwright test     # chưa cài; M9
 
 ## 8. Vấn đề / bug đã biết
 - M3: không có cột giờ mở cửa; chip “Đang mở cửa” chưa áp dụng cho dữ liệu hiện tại. Bộ lọc và metadata danh sách được thêm bằng migration mới; phải chạy `supabase db push` trên cloud.
+- Security 2026-10-08: migration `20261008100000_harden_user_write_privileges.sql` chưa áp dụng cloud. Test-first branch `security/m3-privilege-tests-first` (commit `5cf329f`) đã push, nhưng GitHub Actions API/PR không truy cập được trong môi trường này; mutation PR còn chưa chạy. Xem `docs/SECURITY-TESTS.md`.
 
 - M3: chưa kiểm tra thủ công kéo/zoom và từ chối quyền vị trí; CI cho commit `92249b0` xanh ở cả hai job (run 37616916247). Chưa xác nhận lại thủ công trên phiên bản postinstall; chưa chuyển M4.
 - Worker MapLibre là asset sinh tự động trong `public/maplibre`; sau khi nâng `maplibre-gl`, `postinstall` cần copy lại hai file worker/shared.
@@ -106,3 +107,4 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-06 | Codex | Sửa tương thích API react-map-gl/maplibre 8.1.3 + maplibre-gl 6.12.0; lint/tsc/test/build local pass. Kiểm tra tay + CI xanh còn chờ. | `d9ba42d` |
 | 2026-10-07 | Codex | Sửa worker trắng MapLibre v6: postinstall copy hai module, client setWorkerUrl một chỗ có version query, proxy bỏ qua `/maplibre/*` có test. Generated worker bị gitignore. Bốn lệnh local pass; CI run 37616916247 success ở cả hai job; kiểm tra tay sau install sạch còn chờ. | `92249b0` |
 | 2026-10-07 | Codex | M3: bộ lọc RPC, list view, find-area, BottomNav Map/List, unit + pgTAP tests; migration mới cần cloud db push. Chưa chuyển M4. | pending |
+| 2026-10-08 | Codex | Viết test pgTAP test-first cho bypass `seed`/`created_at`, cột hệ thống, quyền các bảng và giới hạn/sort `restaurants_in_bounds`; migration hardening đang làm, chưa chạy DB/CI, không `db push`, chưa sang M4. | `5cf329f` (test branch) |
