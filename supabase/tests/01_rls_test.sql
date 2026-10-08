@@ -288,24 +288,20 @@ select extensions.throws_ok(
 
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
-update public.restaurants
-set avg_rating = 1, review_count = 99, status = 'closed'
-where id = 'dddd4444-4444-4444-4444-444444444444';
-set local role postgres;
-select extensions.is(
-  (select avg_rating from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
-  0::numeric,
-  'T23 (d): User B cannot change avg_rating'
+select extensions.throws_ok(
+  'update public.restaurants set avg_rating = 1, review_count = 99, status = ''closed'' where id = ''dddd4444-4444-4444-4444-444444444444''',
+  '42501', null,
+  'T23 (d): User B is denied UPDATE on system-managed restaurant fields'
 );
-select extensions.is(
-  (select review_count from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
-  0,
-  'T24 (d): User B cannot change review_count'
+set local role postgres;
+select extensions.ok(
+  (select avg_rating = 0 and review_count = 0 from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
+  'T24 (d): avg_rating and review_count remain unchanged after denied UPDATE'
 );
 select extensions.is(
   (select status from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
   'active',
-  'T25 (d): User B cannot change restaurant status'
+  'T25 (d): status remains unchanged after denied UPDATE'
 );
 
 set local role authenticated;

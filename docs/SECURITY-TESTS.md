@@ -83,6 +83,7 @@ Run `supabase test db` on CI or with the local Supabase Docker stack running. No
 - `auth.users` INSERT fires `public.handle_new_user()` and creates a matching `public.profiles` row. If a test also prepares that profile, use `ON CONFLICT (id) DO UPDATE` instead of a plain INSERT.
 - Database-owner fixture setup must set both `role = postgres` and `request.jwt.claims = '{}'` before inserts when the trigger uses `auth.uid()`. Changing `current_user` does not clear JWT claims; a stale user claim still makes security-definer triggers treat setup rows as that user.
 - Seed restaurant INSERTs are canonicalized by the security trigger (including `avg_rating = 0`). Tests that need controlled ratings must update fixture rows as `postgres` inside their test transaction; do not weaken the trigger.
+- Distinguish privilege denial from RLS filtering: when a role lacks the needed table/column privilege, assert SQLSTATE `42501` with `throws_ok`, then read back as a privileged role to prove the row stayed unchanged. Expect zero affected rows only where the role has the required SQL privilege and the applicable RLS policy filters the target row.
 
 ## CI fixture fixes — 2026-10-08
 
@@ -90,3 +91,4 @@ Run `supabase test db` on CI or with the local Supabase Docker stack running. No
 - `04_map_filter_test.sql`: the restaurant insert trigger deliberately resets seed `avg_rating` to 0. The test now sets eight seed ratings to 4.8 and the rest to 3.5 in a privileged UPDATE inside its transaction; the `min_rating` assertion remains unchanged.
 - `05_security_privileges_test.sql`: inserting fixture users fires `handle_new_user()` and creates profiles. The explicit profile fixture insert now uses `ON CONFLICT (id) DO UPDATE`.
 - Audited all six SQL tests: each starts `begin;`, ends `rollback;`, and contains one unchanged plan. Plans total 77 assertions; literal fixture IDs are distinct across files (excluding the shared all-zero Auth `instance_id`).
+- Follow-up CI fix: `01_rls_test.sql` T23 previously ran a bare `UPDATE public.restaurants` and expected the subsequent readbacks to show no changes. The hardening migration correctly removed UPDATE privilege on system-managed columns, so PostgreSQL raises `42501` before RLS can filter rows. T23 now asserts that error with `throws_ok`; T24/T25 read back counters and status under `postgres`. The three assertions and `plan(38)` are preserved. The earlier T5 review UPDATE/DELETE remain row-filter checks: their SQL privileges are present and RLS policies exclude another user's target row.
