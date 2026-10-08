@@ -21,7 +21,9 @@ from (values
   ('30333333-3333-3333-3333-333333333333'::uuid),
   ('40444444-4444-4444-4444-444444444444'::uuid),
   ('50555555-5555-5555-5555-555555555555'::uuid)
-) as fixture(user_id);
+) as fixture(user_id)
+on conflict (id) do update
+set display_name = excluded.display_name;
 
 -- Actor 1 fills today's restaurant allowance, then tries the user-controlled seed escape.
 set local role postgres;

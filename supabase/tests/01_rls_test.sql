@@ -129,6 +129,8 @@ select extensions.is(
 
 -- Yêu cầu (d): Giới hạn lạm dụng (phía server)
 -- Tạo thêm data bằng quyền postgres trước khi thử
+set local role postgres;
+set local "request.jwt.claims" to '{}';
 do $$
 declare
   new_rest_id uuid;

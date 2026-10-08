@@ -10,9 +10,9 @@
 
 - **Milestone đang làm:** M3 — bản đồ, bộ lọc, vùng đang xem, danh sách và hardening bảo mật cơ sở dữ liệu.
 - **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
-- **Đang hoàn thiện:** Migration hardening đã push lên `main`; pgTAP test-first và mutation có trên hai nhánh riêng. PR/CI database, áp dụng cloud và kiểm tra tay còn chờ.
+- **Đang hoàn thiện:** Đã sửa ba fixture gây CI database đỏ và thêm quy tắc vào SECURITY-TESTS. Chờ log CI database sau push để xác nhận.
 - **Giới hạn dữ liệu:** Schema hiện không có giờ mở cửa nên chưa có chip “Đang mở cửa”. Migration mới cần `supabase db push` lên cloud; không sửa migration đã áp dụng.
-- **Kiểm tra:** `npm run lint`, `npx tsc --noEmit`, `npm test` (4 files / 11 tests), `npm run build` pass trên code hardening. Build cần chạy ngoài sandbox do SWC cache ACL; pgTAP chưa chạy vì Docker daemon không hoạt động. CI status chưa truy vấn được.
+- **Kiểm tra:** Sau sửa fixture: `npm run lint`, `npx tsc --noEmit`, `npm test` (4 files / 11 tests), `npm run build` đều pass. pgTAP dự kiến 6 files / 77 assertions; chờ CI xác nhận do Docker daemon không hoạt động cục bộ.
 - **Nhánh:** `main`. Chưa chuyển M4.
 
 ## 2. Tiến độ milestone
@@ -32,14 +32,14 @@
 
 - **Việc:** Xác minh migration hardening và hoàn tất kiểm thử M3/M1 security follow-up.
 - **File liên quan:** `supabase/migrations/20261008100000_harden_user_write_privileges.sql`, `supabase/tests/05_security_privileges_test.sql`, `supabase/tests/06_map_bounds_security_test.sql`, `docs/SECURITY-TESTS.md`.
-- **Dở ở đâu:** Chưa chạy database tests bằng Docker/CI; mutation branch đã push nhưng PR và pgTAP đỏ chưa được xác nhận; không chạy `supabase db push`; chưa thao tác tay M3.
+- **Dở ở đâu:** Docker daemon chưa chạy cục bộ; chờ CI database sau commit sửa fixture. Không chạy `supabase db push`; chưa thao tác tay M3.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Chạy bốn lệnh kiểm tra ứng dụng và xác minh migration/tests bằng database CI.
-2. Mở PR từ `security/m3-privilege-mutation`, xác nhận pgTAP đỏ khi khôi phục quyền rộng/seed bypass; không merge PR đó.
-3. Chờ user chủ động `supabase db push` migration chưa áp dụng, rồi kiểm tra tay M3; chưa chuyển M4.
+1. Nhận và đọc log CI database do user cung cấp; sửa fixture nếu còn lỗi mà không nới migration.
+2. Xác nhận `Files=6, Tests=77, Result: PASS` từ log CI (các plan hiện tại cộng lại là 77).
+3. Sau khi CI main xanh mới xem xét mutation PR theo chỉ đạo; chưa chạy `supabase db push` hay chuyển M4.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -82,6 +82,7 @@ E2E:             npx playwright test     # chưa cài; M9
 ## 8. Vấn đề / bug đã biết
 - M3: không có cột giờ mở cửa; chip “Đang mở cửa” chưa áp dụng cho dữ liệu hiện tại. Bộ lọc và metadata danh sách được thêm bằng migration mới; phải chạy `supabase db push` trên cloud.
 - Security 2026-10-08: migration `20261008100000_harden_user_write_privileges.sql` chưa áp dụng cloud. Test-first branch `security/m3-privilege-tests-first` (`5cf329f`) và intentional mutation branch `security/m3-privilege-mutation` (`7becc17`) đã push; PR/pgTAP CI evidence còn chờ do Actions API/PR không truy cập được trong môi trường này. Xem `docs/SECURITY-TESTS.md`.
+- 2026-10-08: sửa nguyên nhân test DB đỏ: stale JWT claim khi `set role postgres`, seed rating bị insert trigger canonicalize về 0, `handle_new_user` tự tạo profile gây trùng PK; thêm fixture rules vào `docs/SECURITY-TESTS.md`. Bốn lệnh ứng dụng pass; chờ CI log database, không `db push`.
 
 - M3: chưa kiểm tra thủ công kéo/zoom và từ chối quyền vị trí; CI cho commit `92249b0` xanh ở cả hai job (run 37616916247). Chưa xác nhận lại thủ công trên phiên bản postinstall; chưa chuyển M4.
 - Worker MapLibre là asset sinh tự động trong `public/maplibre`; sau khi nâng `maplibre-gl`, `postinstall` cần copy lại hai file worker/shared.

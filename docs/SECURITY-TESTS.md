@@ -76,3 +76,17 @@ The migration file `20261005100000_security_hardening.sql` is forward-only; afte
 - Deliberate mutation commit `7becc17` is pushed to the separate `security/m3-privilege-mutation` branch. It restores the table-wide restaurant write grant and `source='seed'` escape. This is intentionally not merged. Its [PR creation URL](https://github.com/HienIT1210/Food-map/pull/new/security/m3-privilege-mutation) is available, but the PR itself was not created and the expected pgTAP red result was not observed: this environment lacks GitHub API credentials/CLI and local Docker is unavailable. Treat mutation CI evidence as pending.
 
 Run `supabase test db` on CI or with the local Supabase Docker stack running. No `supabase db push` was run; migration `20261008100000_harden_user_write_privileges.sql` remains unapplied to cloud.
+
+## pgTAP fixture rules
+
+- Every SQL test file must own its fixtures in `begin; ... rollback;`, declare `plan(N)`, and keep the assertion count aligned with that plan. Keep fixture UUID ranges distinct between files.
+- `auth.users` INSERT fires `public.handle_new_user()` and creates a matching `public.profiles` row. If a test also prepares that profile, use `ON CONFLICT (id) DO UPDATE` instead of a plain INSERT.
+- Database-owner fixture setup must set both `role = postgres` and `request.jwt.claims = '{}'` before inserts when the trigger uses `auth.uid()`. Changing `current_user` does not clear JWT claims; a stale user claim still makes security-definer triggers treat setup rows as that user.
+- Seed restaurant INSERTs are canonicalized by the security trigger (including `avg_rating = 0`). Tests that need controlled ratings must update fixture rows as `postgres` inside their test transaction; do not weaken the trigger.
+
+## CI fixture fixes — 2026-10-08
+
+- `01_rls_test.sql`: the privileged fixture block ran with `role = postgres`, but retained User B's JWT claims. Security-definer triggers still saw `auth.uid() = User B`, attributed the generated restaurants to that user and hit the five-per-day cap. The setup now clears `request.jwt.claims` under `postgres`; the existing authenticated limit checks remain unchanged.
+- `04_map_filter_test.sql`: the restaurant insert trigger deliberately resets seed `avg_rating` to 0. The test now sets eight seed ratings to 4.8 and the rest to 3.5 in a privileged UPDATE inside its transaction; the `min_rating` assertion remains unchanged.
+- `05_security_privileges_test.sql`: inserting fixture users fires `handle_new_user()` and creates profiles. The explicit profile fixture insert now uses `ON CONFLICT (id) DO UPDATE`.
+- Audited all six SQL tests: each starts `begin;`, ends `rollback;`, and contains one unchanged plan. Plans total 77 assertions; literal fixture IDs are distinct across files (excluding the shared all-zero Auth `instance_id`).

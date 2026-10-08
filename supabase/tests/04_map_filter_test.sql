@@ -3,6 +3,22 @@ create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 select extensions.plan(5);
 
+-- The insert trigger canonicalizes seed ratings to zero. Set controlled filter fixtures as postgres.
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+update public.restaurants as restaurant
+set avg_rating = case
+  when restaurant.id in (
+    select id
+    from public.restaurants
+    where source = 'seed'
+    order by id
+    limit 8
+  ) then 4.8
+  else 3.5
+end
+where source = 'seed';
+
 select is(
   (select count(*)::int from public.restaurants_in_bounds(10.70, 106.5, 10.90, 106.8, '{"max_price":40000}'::jsonb, 500)),
   0,
