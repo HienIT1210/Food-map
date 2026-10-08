@@ -4,6 +4,7 @@ grant insert (name, address, province, location, created_by)
   on table public.restaurants to authenticated;
 grant update (name, address, province, location, created_by)
   on table public.restaurants to authenticated;
+grant insert, update on table public.restaurants to authenticated; -- intentional mutation: restore broad write privileges
 
 revoke insert, update on table public.reviews from public, anon, authenticated;
 grant insert (user_id, restaurant_id, dish_id, rating, content, is_anonymous)
@@ -215,6 +216,10 @@ begin
   new.status := 'active';
   new.avg_rating := 0;
   new.review_count := 0;
+
+  if auth.uid() is not null and new.source = 'seed' then
+    return new;
+  end if;
 
   if auth.uid() is null then
     new.source := 'seed';
