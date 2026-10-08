@@ -111,3 +111,5 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-08 | Codex | Thêm migration quyền theo cột/trigger, hardening limit và RPC cap/sort; bốn lệnh ứng dụng pass. DB CI/mutation PR chưa xác nhận; không `db push`, chưa sang M4. | `76b4f3d` |
 
 - 2026-10-08 CI follow-up: 01_rls_test.sql T23 now expects SQLSTATE 42501 for UPDATE of system-managed restaurant fields; privileged readbacks confirm avg_rating, review_count, and status did not change. plan(38) and the three assertion slots remain unchanged. CI database result pending user log; no db push, mutation PR, or M4.
+
+- 2026-10-08 mutation evidence: user confirmed main commit 4739d74 is green. PR #4 database job intentionally reports Files=6, Tests=77, Result=FAIL: 01 T23 and 05 R1/R3-R7 detect restored broad write grants; R2 reaches the daily-limit trigger and reports P0001 rather than expected 42501. PR remains unmerged; no db push or M4. See SECURITY-TESTS.md.
