@@ -2,26 +2,27 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-08 bởi Codex
+**Cập nhật lần cuối:** 2026-10-09 bởi Codex
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M3 — bản đồ, bộ lọc, vùng đang xem, danh sách và hardening bảo mật cơ sở dữ liệu.
+- **Milestone đang làm:** M4 — tìm kiếm, trang chi tiết quán và danh sách review chỉ đọc.
 - **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
-- **Đang hoàn thiện:** Đã sửa ba fixture gây CI database đỏ và thêm quy tắc vào SECURITY-TESTS. Chờ log CI database sau push để xác nhận.
+- **Đã xong:** M3 theo xác nhận của người dùng; M0–M2 cũng đã hoàn tất.
+- **Đang hoàn thiện:** M4 có migration tìm kiếm/chi tiết và pgTAP mới; chưa áp dụng migration lên cloud. Chờ CI hai job và log database do người dùng cung cấp.
 - **Giới hạn dữ liệu:** Schema hiện không có giờ mở cửa nên chưa có chip “Đang mở cửa”. Migration mới cần `supabase db push` lên cloud; không sửa migration đã áp dụng.
-- **Kiểm tra:** Sau sửa fixture: `npm run lint`, `npx tsc --noEmit`, `npm test` (4 files / 11 tests), `npm run build` đều pass. pgTAP dự kiến 6 files / 77 assertions; chờ CI xác nhận do Docker daemon không hoạt động cục bộ.
-- **Nhánh:** `main`. Chưa chuyển M4.
+- **Kiểm tra M4 hiện tại:** `npm run lint`, `npx tsc --noEmit`, `npm test` (7 files / 17 tests) và `npm run build` đều pass. Build dùng `SWC_NATIVE_BINDING_CACHE=0` do cache mặc định của Windows bị DACL/owner chặn. pgTAP M4 chưa chạy cục bộ vì Docker không hoạt động; test DB dự kiến 7 files / 85 assertions.
+- **Nhánh:** `main`. M4 đang làm.
 
 ## 2. Tiến độ milestone
 
 - [x] M0 — Khởi tạo repo, CI, cấu trúc
 - [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
-- [ ] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (CI + kiểm tra tay còn chờ)
-- [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review
+- [x] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (người dùng xác nhận đã xong)
+- [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review (code và local unit checks đang triển khai; chờ migration/CI và tự kiểm tra tay)
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
 - [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
 - [ ] M7 — Chỉ đường, lưu quán, chia sẻ
@@ -30,16 +31,16 @@
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** Xác minh migration hardening và hoàn tất kiểm thử M3/M1 security follow-up.
-- **File liên quan:** `supabase/migrations/20261008100000_harden_user_write_privileges.sql`, `supabase/tests/05_security_privileges_test.sql`, `supabase/tests/06_map_bounds_security_test.sql`, `docs/SECURITY-TESTS.md`.
-- **Dở ở đâu:** Docker daemon chưa chạy cục bộ; chờ CI database sau commit sửa fixture. Không chạy `supabase db push`; chưa thao tác tay M3.
+- **Việc:** Hoàn tất xác minh M4 và chờ người dùng chạy `db push` cho migration mới.
+- **File liên quan:** `supabase/migrations/20261009100000_m4_search_and_restaurant_detail.sql`, `supabase/tests/07_m4_anon_read_test.sql`, `src/features/restaurants/`, `src/features/reviews/`, `src/app/[locale]/restaurants/[id]/page.tsx`.
+- **Dở ở đâu:** CI chưa có log; Docker daemon chưa chạy cục bộ. Chưa chạy `db push`, chưa sang M5.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Nhận và đọc log CI database do user cung cấp; sửa fixture nếu còn lỗi mà không nới migration.
-2. Xác nhận `Files=6, Tests=77, Result: PASS` từ log CI (các plan hiện tại cộng lại là 77).
-3. Sau khi CI main xanh mới xem xét mutation PR theo chỉ đạo; chưa chạy `supabase db push` hay chuyển M4.
+1. Commit và push M4; đọc log CI hai job do người dùng cung cấp, đặc biệt database `Files=7, Tests=85, Result: PASS`.
+2. Nếu CI đỏ, sửa nguyên nhân gốc và chạy lại đủ bốn lệnh; không nới bảo mật hoặc xóa test.
+3. Sau khi người dùng xác nhận CI xanh, áp dụng migration mới bằng `npx supabase db push` theo xác nhận của họ, rồi làm các bước kiểm tra tay bên dưới; không sang M5.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -90,6 +91,11 @@ E2E:             npx playwright test     # chưa cài; M9
 - `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này.
 - `next dev` tự thêm khối luật Next.js vào cuối `AGENTS.md`; nội dung luật repo gốc được giữ nguyên.
 - Deno Edge Functions trong `supabase/functions` được exclude khỏi `tsconfig.json` của Next.js để tránh xung đột kiểu type giữa Node và Deno.
+- M4 tạo migration mới `20261009100000_m4_search_and_restaurant_detail.sql` (thay RPC `search_restaurants`, thêm `restaurant_detail`, index trigram/cursor); **chưa `db push`**. Search/detail RPC là `security invoker`, có `set search_path = public, extensions`, grant execute tường minh cho `anon, authenticated`.
+- M4 review client chỉ query `public_reviews` với danh sách cột tường minh và schema strict; không chọn `author_id`, `user_id` hoặc avatar, và nhãn ẩn danh không có liên kết hồ sơ. Có unit test kiểm tra request/response giả lập và pgTAP chạy dưới `anon`.
+- Schema hiện không có cột/nguồn ảnh cho quán hoặc review; M4 chỉ hiển thị danh sách món, chưa thêm ảnh hay triển khai viết review (M5).
+- Hướng dẫn tự kiểm tra M4 sau `db push`: (1) tìm `pho bo`, xác nhận món/quán “phở bò” xuất hiện; thử một lỗi nhỏ như `pho bee`, tên quán và địa chỉ không dấu; (2) chọn kết quả, xác nhận bản đồ bay tới pin; bấm pin/thẻ “Xem chi tiết”; (3) xem địa chỉ, điểm, số review, món/giá; thử Google Maps, Apple Maps và Chia sẻ; (4) đổi review giữa mới nhất/hữu ích/sao cao/sao thấp, tải trang kế; (5) dùng fixture có review ẩn danh, xác nhận “Thực khách ẩn danh” và không có link hồ sơ; trong DevTools Network mở phản hồi `public_reviews`, xác nhận không có khóa/giá trị `user_id`; (6) thử trạng thái rỗng và ngắt mạng để xem lỗi/thử lại. Không tạo review mới vì viết review thuộc M5.
+- M4 local checks 2026-10-09: lint pass, typecheck pass, npm test pass (7 files / 17 tests), build pass với `SWC_NATIVE_BINDING_CACHE=0` (temporary cache; cache mặc định trên Windows bị DACL/owner chặn). CI và pgTAP chưa xác nhận.
 
 ## 9. Nhật ký bàn giao
 
@@ -113,3 +119,4 @@ E2E:             npx playwright test     # chưa cài; M9
 - 2026-10-08 CI follow-up: 01_rls_test.sql T23 now expects SQLSTATE 42501 for UPDATE of system-managed restaurant fields; privileged readbacks confirm avg_rating, review_count, and status did not change. plan(38) and the three assertion slots remain unchanged. CI database result pending user log; no db push, mutation PR, or M4.
 
 - 2026-10-08 mutation evidence: user confirmed main commit 4739d74 is green. PR #4 database job intentionally reports Files=6, Tests=77, Result=FAIL: 01 T23 and 05 R1/R3-R7 detect restored broad write grants; R2 reaches the daily-limit trigger and reports P0001 rather than expected 42501. PR remains unmerged; no db push or M4. See SECURITY-TESTS.md.
+- 2026-10-09 M4: implemented accent-insensitive/typo-tolerant search RPC, restaurant detail route/menu/maps/share, cursor-paginated public review list and anonymous privacy checks; added anon pgTAP and migration `20261009100000_m4_search_and_restaurant_detail.sql`. No cloud `db push`; M5 remains untouched. All four local commands pass; both CI jobs pending.

@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import Map, { Source, Layer, MapRef, ViewStateChangeEvent, AttributionControl } from "react-map-gl/maplibre";
+import { Link } from "@/i18n/navigation";
 import type { CircleLayerSpecification, SymbolLayerSpecification } from "react-map-gl/maplibre";
 import { GeoJSONSource, getVersion, setWorkerUrl } from "maplibre-gl";
 import { useRestaurantsInBounds, RestaurantPin } from "../hooks/useRestaurantsInBounds";
@@ -13,6 +14,8 @@ import {
   type MapFilters,
 } from "../map-utils";
 import { useFormatter, useTranslations } from "next-intl";
+import { RestaurantSearch } from "@/features/restaurants/components/RestaurantSearch";
+import type { RestaurantSearchResult } from "@/features/restaurants/types";
 
 if (typeof window !== "undefined") {
   setWorkerUrl(`/maplibre/maplibre-gl-worker.mjs?v=${getVersion()}`);
@@ -215,6 +218,22 @@ export function MapComponent() {
     setMode("map");
   }, [setMode]);
 
+  const selectSearchResult = useCallback((result: RestaurantSearchResult) => {
+    mapRef.current?.flyTo({ center: [result.lng, result.lat], zoom: 15, duration: 800 });
+    setSelectedPin({
+      id: result.id,
+      name: result.name,
+      lat: result.lat,
+      lng: result.lng,
+      avg_rating: result.avg_rating,
+      review_count: result.review_count,
+      status: "active",
+      province: null,
+      dish_types: [],
+    });
+    setMode("map");
+  }, [setMode]);
+
   const toggleRatingFilter = () => {
     updateFilters({ ...filters, minRating: filters.minRating === null ? 4 : null });
   };
@@ -231,7 +250,8 @@ export function MapComponent() {
 
   return (
     <div className="relative h-[calc(100dvh-4rem)] w-full">
-      <div className="absolute left-3 right-3 top-3 z-20 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      <RestaurantSearch onSelect={selectSearchResult} />
+      <div className="absolute left-3 right-3 top-[4.25rem] z-20 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         <label className="sr-only" htmlFor="map-price-filter">{t("filters.maxPrice")}</label>
         <select
           id="map-price-filter"
@@ -385,6 +405,9 @@ export function MapComponent() {
                   {t("distanceMeters", { distance: Math.round(distanceInMeters(userLocation, selectedPin)) })}
                 </p>
               )}
+              <Link href={"/restaurants/" + selectedPin.id} className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white">
+                {t("viewDetails")}
+              </Link>
             </div>
             <button
               onClick={() => setSelectedPin(null)}

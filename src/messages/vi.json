@@ -75,6 +75,55 @@
     "reviews": "đánh giá",
     "viewDetails": "Xem chi tiết"
   },
+  "search": {
+    "label": "Tìm quán, món hoặc địa chỉ",
+    "placeholder": "Tìm phở bò, tên quán, địa chỉ…",
+    "loading": "Đang tìm…",
+    "error": "Không tìm được kết quả.",
+    "empty": "Không có kết quả phù hợp.",
+    "retry": "Thử lại",
+    "noAddress": "Chưa có địa chỉ",
+    "minimumQuery": "Nhập ít nhất 2 ký tự.",
+    "close": "Đóng kết quả tìm kiếm"
+  },
+  "restaurant": {
+    "title": "Chi tiết quán",
+    "loading": "Đang tải thông tin quán…",
+    "error": "Không tải được thông tin quán.",
+    "retry": "Thử lại",
+    "notFound": "Không tìm thấy quán này.",
+    "noAddress": "Chưa có địa chỉ",
+    "reviewCount": "{count} đánh giá",
+    "directionsGoogle": "Chỉ đường với Google Maps",
+    "directionsApple": "Mở bằng Apple Maps",
+    "share": "Chia sẻ",
+    "shareSuccess": "Đã chia sẻ liên kết.",
+    "shareError": "Không thể chia sẻ liên kết.",
+    "backToMap": "Về bản đồ",
+    "menuTitle": "Món ăn",
+    "menuEmpty": "Quán chưa có thông tin món ăn.",
+    "priceMissing": "Chưa có giá",
+    "reviews": {
+      "title": "Đánh giá",
+      "sortLabel": "Sắp xếp đánh giá",
+      "sort": {
+        "newest": "Mới nhất",
+        "helpful": "Hữu ích nhất",
+        "rating_high": "Sao cao trước",
+        "rating_low": "Sao thấp trước"
+      },
+      "anonymous": "Thực khách ẩn danh",
+      "unknownAuthor": "Thực khách",
+      "rating": "{rating} sao",
+      "helpfulCount": "{count} lượt hữu ích",
+      "loading": "Đang tải đánh giá…",
+      "loadingMore": "Đang tải thêm…",
+      "error": "Không tải được đánh giá.",
+      "retry": "Thử lại",
+      "empty": "Quán chưa có đánh giá.",
+      "loadMore": "Xem thêm đánh giá"
+    }
+  },
   "nav": {
     "map": "Bản đồ",
     "list": "Danh sách",

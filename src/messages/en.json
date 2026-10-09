@@ -75,6 +75,55 @@
     "reviews": "reviews",
     "viewDetails": "View Details"
   },
+  "search": {
+    "label": "Search restaurants, dishes, or addresses",
+    "placeholder": "Search pho bo, restaurant, address…",
+    "loading": "Searching…",
+    "error": "Could not search right now.",
+    "empty": "No matching results.",
+    "retry": "Try again",
+    "noAddress": "No address listed",
+    "minimumQuery": "Enter at least 2 characters.",
+    "close": "Close search results"
+  },
+  "restaurant": {
+    "title": "Restaurant details",
+    "loading": "Loading restaurant…",
+    "error": "Could not load this restaurant.",
+    "retry": "Try again",
+    "notFound": "Restaurant not found.",
+    "noAddress": "No address listed",
+    "reviewCount": "{count} reviews",
+    "directionsGoogle": "Directions with Google Maps",
+    "directionsApple": "Open in Apple Maps",
+    "share": "Share",
+    "shareSuccess": "Link shared.",
+    "shareError": "Could not share the link.",
+    "backToMap": "Back to map",
+    "menuTitle": "Dishes",
+    "menuEmpty": "No dishes listed for this restaurant.",
+    "priceMissing": "Price not listed",
+    "reviews": {
+      "title": "Reviews",
+      "sortLabel": "Sort reviews",
+      "sort": {
+        "newest": "Newest",
+        "helpful": "Most helpful",
+        "rating_high": "Highest rated",
+        "rating_low": "Lowest rated"
+      },
+      "anonymous": "Anonymous diner",
+      "unknownAuthor": "Diner",
+      "rating": "{rating} stars",
+      "helpfulCount": "{count} helpful",
+      "loading": "Loading reviews…",
+      "loadingMore": "Loading more…",
+      "error": "Could not load reviews.",
+      "retry": "Try again",
+      "empty": "No reviews yet.",
+      "loadMore": "Load more reviews"
+    }
+  },
   "nav": {
     "map": "Map",
     "list": "List",

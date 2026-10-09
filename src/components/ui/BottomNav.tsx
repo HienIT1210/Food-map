@@ -11,10 +11,11 @@ export function BottomNav() {
   const t = useTranslations("nav");
   const { mode, setMode } = useMapView();
   const isProfile = pathname.includes("/profile");
+  const isMapPage = pathname === "/";
 
   const selectView = (nextMode: MapViewMode) => {
     setMode(nextMode);
-    if (isProfile) router.push("/");
+    if (!isMapPage) router.push("/");
   };
 
   const viewButtonClass = (active: boolean) =>
@@ -24,8 +25,8 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-zinc-200 bg-white/90 pb-safe backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/90">
       <button
         type="button"
-        aria-pressed={mode === "map" && !isProfile}
-        className={viewButtonClass(mode === "map" && !isProfile)}
+        aria-pressed={mode === "map" && isMapPage}
+        className={viewButtonClass(mode === "map" && isMapPage)}
         onClick={() => selectView("map")}
       >
         <span className="text-xl" aria-hidden="true">🗺️</span>
@@ -33,8 +34,8 @@ export function BottomNav() {
       </button>
       <button
         type="button"
-        aria-pressed={mode === "list" && !isProfile}
-        className={viewButtonClass(mode === "list" && !isProfile)}
+        aria-pressed={mode === "list" && isMapPage}
+        className={viewButtonClass(mode === "list" && isMapPage)}
         onClick={() => selectView("list")}
       >
         <span className="text-xl" aria-hidden="true">☷</span>
