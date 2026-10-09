@@ -131,6 +131,31 @@ select extensions.diag(
       from pg_proc
       where oid = 'public.search_restaurants(text,integer)'::regprocedure
     ),
+    'candidate_rewrite_installed', position(
+      'all_matches' in (
+        select prosrc
+        from pg_proc
+        where oid = 'public.search_restaurants(text,integer)'::regprocedure
+      )
+    ) > 0,
+    'direct_name_candidate_count', (
+      select count(*)::int
+      from public.restaurants as candidate
+      where candidate.id = restaurant.id
+        and candidate.status = 'active'
+        and (
+          extensions.similarity(
+            public.f_unaccent(lower(candidate.name)),
+            public.f_unaccent(lower('pho bo'))
+          ) >= 0.25
+          or exists (
+            select 1
+            from unnest(string_to_array(public.f_unaccent(lower('pho bo')), ' ')) as query_token(value)
+            where length(query_token.value) >= 3
+              and position(query_token.value in public.f_unaccent(lower(candidate.name))) > 0
+          )
+        )
+    ),
     'full_query_similarity', extensions.similarity(
       public.f_unaccent(lower(restaurant.name)),
       public.f_unaccent(lower('pho bo'))
