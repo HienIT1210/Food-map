@@ -138,7 +138,7 @@ export function RestaurantDetail({ restaurantId }: { restaurantId: string }) {
             )}
           </section>
 
-          <ReviewList restaurantId={restaurant.id} />
+          <ReviewList restaurantId={restaurant.id} dishes={dishes} />
         </>
       )}
     </main>

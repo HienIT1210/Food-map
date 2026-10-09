@@ -16,6 +16,7 @@ const anonymousReview: PublicReview = {
   helpful_count: 3,
   created_at: "2026-10-09T10:00:00.000Z",
   author_name: null,
+  photo_paths: [],
 };
 
 afterEach(() => {

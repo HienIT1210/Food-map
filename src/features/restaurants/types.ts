@@ -22,6 +22,7 @@ export const restaurantSearchResultSchema = z.object({
 });
 
 export const restaurantDishSchema = z.object({
+  id: z.string().uuid(),
   name: z.string(),
   priceVnd: z.number().int().nonnegative().nullable(),
 });

@@ -13,6 +13,7 @@ export const publicReviewSchema = z.object({
   helpful_count: z.number().int().nonnegative(),
   created_at: z.string().datetime({ offset: true }),
   author_name: z.string().nullable(),
+  photo_paths: z.array(z.string()),
 }).strict();
 
 export type PublicReview = z.infer<typeof publicReviewSchema>;
@@ -23,3 +24,15 @@ export type ReviewPage = {
   reviews: PublicReview[];
   nextCursor: ReviewCursor | null;
 };
+
+export const ownReviewSchema = z.object({
+  id: z.string().uuid(),
+  restaurant_id: z.string().uuid(),
+  restaurant_name: z.string(),
+  dish_id: z.string().uuid().nullable(),
+  rating: z.number().int().min(1).max(5),
+  content: z.string().nullable(),
+  is_anonymous: z.boolean(),
+  created_at: z.string().datetime({ offset: true }),
+}).strict();
+export type OwnReview = z.infer<typeof ownReviewSchema>;

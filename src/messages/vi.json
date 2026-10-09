@@ -43,7 +43,19 @@
     "confirmDeleteMsg": "Bạn có chắc chắn muốn xoá vĩnh viễn tài khoản và toàn bộ bài đánh giá?",
     "confirmDeleteBtn": "Tôi hiểu và muốn xoá tài khoản",
     "cancel": "Huỷ",
-    "deleteFailed": "Xoá tài khoản thất bại. Vui lòng thử lại."
+    "deleteFailed": "Xoá tài khoản thất bại. Vui lòng thử lại.",
+    "myReviews": {
+      "title": "Review của tôi",
+      "loading": "Đang tải review của bạn…",
+      "error": "Không tải hoặc xóa được review.",
+      "retry": "Thử lại",
+      "empty": "Bạn chưa viết review nào.",
+      "anonymous": "Đăng ẩn danh",
+      "public": "Công khai",
+      "delete": "Xóa",
+      "deleting": "Đang xóa…",
+      "edit": "Mở quán để sửa"
+    }
   },
   "demo": {
     "guestActionNotice": "Hành động này yêu cầu đăng nhập. Thử bấm để kiểm tra tính năng Guest Mode!",
@@ -116,12 +128,40 @@
       "unknownAuthor": "Thực khách",
       "rating": "{rating} sao",
       "helpfulCount": "{count} lượt hữu ích",
+      "photosLabel": "Ảnh trong review",
+      "photoAlt": "Ảnh món ăn trong review",
+      "markHelpful": "Hữu ích",
+      "removeHelpful": "Bỏ hữu ích",
+      "helpfulError": "Không thể cập nhật lượt hữu ích. Có thể bạn chưa đăng nhập hoặc đang bấm review của mình.",
       "loading": "Đang tải đánh giá…",
       "loadingMore": "Đang tải thêm…",
       "error": "Không tải được đánh giá.",
       "retry": "Thử lại",
       "empty": "Quán chưa có đánh giá.",
-      "loadMore": "Xem thêm đánh giá"
+      "loadMore": "Xem thêm đánh giá",
+      "composer": {
+        "title": "Viết review",
+        "editTitle": "Sửa review của bạn",
+        "signInHint": "Đăng nhập khi gửi review.",
+        "dish": "Món được nhắc tới",
+        "restaurantOverall": "Đánh giá chung về quán",
+        "rating": "Số sao",
+        "stars": "sao",
+        "content": "Nhận xét",
+        "photos": "Ảnh (tối đa 5 ảnh)",
+        "photoHint": "Đã chọn {count}/5 ảnh. Ảnh được thu nhỏ và loại bỏ dữ liệu vị trí trước khi tải lên.",
+        "anonymous": "Đăng ẩn danh",
+        "anonymousHint": "Ẩn với người dùng khác; quản trị viên vẫn có thể xử lý vi phạm. Tài khoản cần xác minh email và tồn tại ít nhất 24 giờ.",
+        "submit": "Đăng review",
+        "saveEdit": "Lưu thay đổi",
+        "saving": "Đang lưu…",
+        "delete": "Xóa review",
+        "saved": "Đã lưu review.",
+        "deleted": "Đã xóa review.",
+        "loadError": "Không tải được review của bạn.",
+        "saveError": "Không lưu được review. Kiểm tra đăng nhập, giới hạn hoặc ảnh rồi thử lại.",
+        "deleteError": "Không xóa được review. Vui lòng thử lại."
+      }
     }
   },
   "nav": {

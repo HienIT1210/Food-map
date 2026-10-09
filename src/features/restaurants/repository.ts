@@ -11,7 +11,7 @@ import {
 
 const restaurantDishesSchema = z.array(z.object({
   price_vnd: z.number().int().nonnegative().nullable(),
-  dish: z.union([z.object({ name: z.string() }), z.array(z.object({ name: z.string() }))]).nullable(),
+  dish: z.union([z.object({ id: z.string().uuid(), name: z.string() }), z.array(z.object({ id: z.string().uuid(), name: z.string() }))]).nullable(),
 }));
 
 function throwIfError(error: { message: string } | null): void {
@@ -50,12 +50,12 @@ export async function getRestaurantDishes(
   const supabase = createClient();
   const { data, error } = await supabase
     .from("restaurant_dishes")
-    .select("price_vnd, dish:dishes(name)")
+    .select("price_vnd, dish:dishes(id, name)")
     .eq("restaurant_id", restaurantId)
     .abortSignal(signal);
   throwIfError(error);
   return restaurantDishesSchema.parse(data ?? []).flatMap((row) => {
     const dish = Array.isArray(row.dish) ? row.dish[0] : row.dish;
-    return dish ? [restaurantDishSchema.parse({ name: dish.name, priceVnd: row.price_vnd })] : [];
+    return dish ? [restaurantDishSchema.parse({ id: dish.id, name: dish.name, priceVnd: row.price_vnd })] : [];
   });
 }

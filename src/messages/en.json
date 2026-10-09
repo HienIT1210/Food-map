@@ -43,7 +43,19 @@
     "confirmDeleteMsg": "Are you sure you want to permanently delete your account and all reviews?",
     "confirmDeleteBtn": "Yes, delete my account",
     "cancel": "Cancel",
-    "deleteFailed": "Failed to delete account. Please try again."
+    "deleteFailed": "Failed to delete account. Please try again.",
+    "myReviews": {
+      "title": "My Reviews",
+      "loading": "Loading your reviews…",
+      "error": "Could not load or delete the review.",
+      "retry": "Try again",
+      "empty": "You have not written any reviews yet.",
+      "anonymous": "Posted anonymously",
+      "public": "Public",
+      "delete": "Delete",
+      "deleting": "Deleting…",
+      "edit": "Open restaurant to edit"
+    }
   },
   "demo": {
     "guestActionNotice": "This action requires an account. Try clicking to test Guest Mode gating!",
@@ -116,12 +128,40 @@
       "unknownAuthor": "Diner",
       "rating": "{rating} stars",
       "helpfulCount": "{count} helpful",
+      "photosLabel": "Review photos",
+      "photoAlt": "Food photo in review",
+      "markHelpful": "Helpful",
+      "removeHelpful": "Undo helpful",
+      "helpfulError": "Could not update the helpful vote. Sign in and do not vote for your own review.",
       "loading": "Loading reviews…",
       "loadingMore": "Loading more…",
       "error": "Could not load reviews.",
       "retry": "Try again",
       "empty": "No reviews yet.",
-      "loadMore": "Load more reviews"
+      "loadMore": "Load more reviews",
+      "composer": {
+        "title": "Write a review",
+        "editTitle": "Edit your review",
+        "signInHint": "Sign in when you submit your review.",
+        "dish": "Dish mentioned",
+        "restaurantOverall": "Overall restaurant review",
+        "rating": "Rating",
+        "stars": "stars",
+        "content": "Your review",
+        "photos": "Photos (up to 5)",
+        "photoHint": "Selected {count}/5 photos. Images are resized and location metadata is removed before upload.",
+        "anonymous": "Post anonymously",
+        "anonymousHint": "Hidden from other users; moderators may still handle abuse. Account must have a verified email and be at least 24 hours old.",
+        "submit": "Post review",
+        "saveEdit": "Save changes",
+        "saving": "Saving…",
+        "delete": "Delete review",
+        "saved": "Review saved.",
+        "deleted": "Review deleted.",
+        "loadError": "Could not load your review.",
+        "saveError": "Could not save the review. Check sign-in, limits, or photos and try again.",
+        "deleteError": "Could not delete the review. Please try again."
+      }
     }
   },
   "nav": {

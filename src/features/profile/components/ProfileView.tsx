@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { authRepository } from "@/features/auth/repository";
+import { MyReviews } from "@/features/reviews/components/MyReviews";
 
 export function ProfileView() {
   const t = useTranslations("profile");
@@ -29,12 +30,15 @@ export function ProfileView() {
 
   // Khi có user, render form chỉnh sửa hồ sơ
   return (
-    <ProfileForm
-      user={user}
-      initialDisplayName={profile?.display_name || ""}
-      initialAvatarUrl={profile?.avatar_url || ""}
-      onUpdated={refreshProfile}
-    />
+    <>
+      <ProfileForm
+        user={user}
+        initialDisplayName={profile?.display_name || ""}
+        initialAvatarUrl={profile?.avatar_url || ""}
+        onUpdated={refreshProfile}
+      />
+      <MyReviews />
+    </>
   );
 }
 

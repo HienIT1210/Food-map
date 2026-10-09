@@ -1,4 +1,4 @@
-# PROGRESS — Trạng thái dự án (bộ nhớ chung giữa các agent)
+﻿# PROGRESS — Trạng thái dự án (bộ nhớ chung giữa các agent)
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
@@ -8,13 +8,14 @@
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone hiện tại:** M4 — tìm kiếm, trang chi tiết quán và danh sách review chỉ đọc. Code, kiểm tra local, CI và migration đã được xác nhận; chưa bắt đầu M5.
+- **Milestone hiện tại:** M5 — đang triển khai luồng viết/sửa/xóa review, upload ảnh, ẩn danh và nút hữu ích. M4 CI xanh và migration đã `db push` theo xác nhận của người dùng.
 - **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
 - **Đã xong:** M3 theo xác nhận của người dùng; M0–M2 cũng đã hoàn tất.
 - **Đã xác nhận:** Người dùng báo CI đã pass và đã chạy `db push` lên cloud. Test T6/T11 dùng `lim=50`; CI trước đó xác nhận `Test Phở` ở vị trí 11 với `lim=10`, nên test dùng limit nhỏ bị ảnh hưởng bởi top-N chứ RPC không lỗi.
-- **Còn lại:** Chưa có xác nhận kiểm tra UI thủ công sau `db push`; checklist ở cuối file. Không có thay đổi schema chưa áp dụng được ghi nhận trong nhánh hiện tại.
-- **Kiểm tra local:** `npm run lint`, `npx tsc --noEmit`, `npm test` (7 files / 17 tests), `npm run build` đều pass trên `b20d016`; build dùng `SWC_NATIVE_BINDING_CACHE=0` do cache SWC mặc định trên Windows bị quyền DACL.
-- **Nhánh:** `main`, working tree sạch tại `b20d016` lúc bàn giao trạng thái này.
+- **M5 đã thêm trong working tree:** migration `20261009150000_m5_review_writes.sql`; RPC ghi/xóa/đánh dấu hữu ích; storage bucket và quyền ảnh; giới hạn ảnh 5, tài khoản ẩn danh xác minh email + tuổi tối thiểu 24h; tính lại điểm/số review; composer và xử lý ảnh canvas xóa EXIF.
+- **Còn lại:** M5 chưa được xác nhận hoàn tất. Migration chưa `db push`; pgTAP mới chưa chạy trên database; bốn lệnh ứng dụng và CI cuối còn chờ. M4 chưa có xác nhận kiểm tra UI thủ công.
+- **Kiểm tra M5 local 2026-10-09:** `npm run lint` pass; `npx tsc --noEmit` pass; `npm test` pass (8 files / 18 tests); `npm run build` pass (Next.js compile, TypeScript, static generation). Build cần chạy ngoài sandbox do Windows DACL chặn SWC; không chạy được Supabase pgTAP local vì máy dev không dùng Docker.
+- **Nhánh:** `main`; đang có thay đổi M5 chưa commit.
 
 ## 2. Tiến độ milestone
 
@@ -23,7 +24,7 @@
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
 - [x] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (người dùng xác nhận đã xong)
 - [x] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review; local checks và CI pass theo xác nhận người dùng, migration đã `db push`; còn checklist UI thủ công chưa được xác nhận
-- [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
+- [ ] M5 — Đang triển khai; code và test mới trong working tree, migration cần CI và người dùng `db push` trước khi xác nhận DoD
 - [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
 - [ ] M7 — Chỉ đường, lưu quán, chia sẻ
 - [ ] M8 — Báo cáo, chặn, kiểm duyệt, trang quản trị, pháp lý
@@ -31,16 +32,16 @@
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** M4 code/CI/database đã xác nhận; chờ kiểm tra tay sau `db push`.
-- **File liên quan:** `src/features/restaurants/`, `src/features/reviews/`, `supabase/tests/01_rls_test.sql`, `supabase/tests/07_m4_anon_read_test.sql`, `docs/SECURITY-TESTS.md`.
-- **Dở ở đâu:** Chưa có kết quả kiểm tra trực tiếp trên UI và Network của môi trường cloud. Không còn chẩn đoán SQL tạm; `plan(38)` giữ nguyên. M5 chưa bắt đầu.
+- **Việc:** M5.
+- **File liên quan:** `src/features/reviews/`, `src/features/restaurants/`, `src/messages/{vi,en}.json`, `supabase/migrations/20261009150000_m5_review_writes.sql`, `supabase/tests/08_m5_review_write_test.sql`.
+- **Dở ở đâu:** CI của commit M5 và pgTAP 08 còn chờ; migration cần người dùng `db push` sau CI; chưa kiểm tra tay M5. Chưa nhận kết quả kiểm tra tay M4.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Tự kiểm tra tìm `pho bo` và lỗi chính tả nhẹ trên cloud; xác nhận kết quả món/quán rồi chọn kết quả để mở trang chi tiết.
-2. Kiểm tra chi tiết quán, phân trang/sắp xếp review và trạng thái rỗng/lỗi; trong Network xác nhận review ẩn danh không có `user_id`.
-3. Ghi kết quả kiểm tra tay vào PROGRESS; chỉ bắt đầu M5 khi người dùng giao việc mới. Migration đã được người dùng `db push`; không chạy lại.
+1. Commit và push thay đổi M5; chờ người dùng dán trạng thái job app/database của CI.
+2. Sau khi CI database xanh, người dùng chạy `supabase db push` để áp dụng `20261009150000_m5_review_writes.sql`.
+3. Kiểm tra tay: đăng review thường có món/ảnh, xem ảnh hiển thị và giới hạn 5; sửa cùng cặp quán+món rồi xác nhận không tạo hàng thứ hai; xóa trong “Review của tôi” và xác nhận ảnh đi theo; bấm Hữu ích trên review người khác (không được trên review của mình); tạo tài khoản chưa đủ 24h/chưa xác minh và thử đăng ẩn danh; xác nhận review thứ 11 trong 24h bị server từ chối; DevTools xem response review ẩn danh không có `user_id`/UUID chủ review trong đường dẫn ảnh. Không sang M6.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -96,6 +97,7 @@ E2E:             npx playwright test     # chưa cài; M9
 - Schema hiện không có cột/nguồn ảnh cho quán hoặc review; M4 chỉ hiển thị danh sách món, chưa thêm ảnh hay triển khai viết review (M5).
 - Hướng dẫn tự kiểm tra M4 sau `db push`: (1) tìm `pho bo`, xác nhận món/quán “phở bò” xuất hiện; thử một lỗi nhỏ như `pho bee`, tên quán và địa chỉ không dấu; (2) chọn kết quả, xác nhận bản đồ bay tới pin; bấm pin/thẻ “Xem chi tiết”; (3) xem địa chỉ, điểm, số review, món/giá; thử Google Maps, Apple Maps và Chia sẻ; (4) đổi review giữa mới nhất/hữu ích/sao cao/sao thấp, tải trang kế; (5) dùng fixture có review ẩn danh, xác nhận “Thực khách ẩn danh” và không có link hồ sơ; trong DevTools Network mở phản hồi `public_reviews`, xác nhận không có khóa/giá trị `user_id`; (6) thử trạng thái rỗng và ngắt mạng để xem lỗi/thử lại. Không tạo review mới vì viết review thuộc M5.
 - M4 local checks 2026-10-09: lint, typecheck, npm test (7 files / 17 tests), build đều pass với `SWC_NATIVE_BINDING_CACHE=0`; người dùng xác nhận CI pass và migration đã được đẩy lên cloud.
+- M5 2026-10-09: thêm RPC bảo vệ ghi/sửa/xóa review, “Review của tôi”, vote hữu ích, Storage ảnh, giới hạn 5 ảnh, giới hạn review 10/ngày khóa theo tài khoản và điều kiện ẩn danh. Canvas giới hạn cạnh 1600px/nén JPEG 0.8/xóa EXIF; test ảnh có EXIF đầu vào và pgTAP plan(13). Bốn lệnh ứng dụng local pass; pgTAP/CI và kiểm tra tay còn chờ. Migration `20261009150000_m5_review_writes.sql` chưa `db push`.
 
 ## 9. Nhật ký bàn giao
 
@@ -119,4 +121,5 @@ E2E:             npx playwright test     # chưa cài; M9
 - 2026-10-08 CI follow-up: 01_rls_test.sql T23 now expects SQLSTATE 42501 for UPDATE of system-managed restaurant fields; privileged readbacks confirm avg_rating, review_count, and status did not change. plan(38) and the three assertion slots remain unchanged. CI database result pending user log; no db push, mutation PR, or M4.
 
 - 2026-10-08 mutation evidence: user confirmed main commit 4739d74 is green. PR #4 database job intentionally reports Files=6, Tests=77, Result=FAIL: 01 T23 and 05 R1/R3-R7 detect restored broad write grants; R2 reaches the daily-limit trigger and reports P0001 rather than expected 42501. PR remains unmerged; no db push or M4. See SECURITY-TESTS.md.
-- 2026-10-09 user confirms M4 CI pass and cloud `db push` complete. M4 local checks pass; manual UI/Network checklist remains unconfirmed. No M5 work started.
+- 2026-10-09 user confirms M4 CI pass and cloud `db push` complete. M4 local checks pass; manual UI/Network checklist remains unconfirmed.
+- 2026-10-09 M5 implementation prepared: local lint/tsc/test/build pass; pgTAP/CI, migration push, and manual verification pending. No work on M6.

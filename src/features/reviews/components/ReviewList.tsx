@@ -5,15 +5,19 @@ import { useTranslations } from "next-intl";
 import { useRestaurantReviews } from "../hooks/useRestaurantReviews";
 import { reviewSortSchema, type ReviewSort } from "../types";
 import { ReviewCard } from "./ReviewCard";
+import { ReviewComposer } from "./ReviewComposer";
+import type { RestaurantDish } from "@/features/restaurants/types";
 
 const sortOptions: ReviewSort[] = ["newest", "helpful", "rating_high", "rating_low"];
 
-export function ReviewList({ restaurantId }: { restaurantId: string }) {
+export function ReviewList({ restaurantId, dishes }: { restaurantId: string; dishes: RestaurantDish[] }) {
   const t = useTranslations("restaurant.reviews");
   const [sort, setSort] = useState<ReviewSort>("newest");
   const { reviews, loading, loadingMore, error, hasMore, loadMore, retry } = useRestaurantReviews(restaurantId, sort);
 
   return (
+    <>
+    <ReviewComposer restaurantId={restaurantId} dishes={dishes} onChanged={retry} />
     <section aria-labelledby="restaurant-reviews-title" className="mt-8">
       <div className="flex items-center justify-between gap-3">
         <h2 id="restaurant-reviews-title" className="text-xl font-bold">{t("title")}</h2>
@@ -48,5 +52,6 @@ export function ReviewList({ restaurantId }: { restaurantId: string }) {
         </button>
       )}
     </section>
+    </>
   );
 }
