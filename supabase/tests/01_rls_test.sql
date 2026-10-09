@@ -114,6 +114,38 @@ set local role postgres;
 set search_path = public, extensions;
 
 -- Yêu cầu (f): Tìm kiếm trigram
+select extensions.diag(
+  'T6 diagnostic: ' || jsonb_build_object(
+    'fixture_name', restaurant.name,
+    'normalized_name', public.f_unaccent(lower(restaurant.name)),
+    'normalized_query', public.f_unaccent(lower('pho bo')),
+    'pho_token_position', position('pho' in public.f_unaccent(lower(restaurant.name))),
+    'name_token_match', exists (
+      select 1
+      from unnest(string_to_array(public.f_unaccent(lower('pho bo')), ' ')) as query_token(value)
+      where length(query_token.value) >= 3
+        and position(query_token.value in public.f_unaccent(lower(restaurant.name))) > 0
+    ),
+    'function_search_path', (
+      select proconfig
+      from pg_proc
+      where oid = 'public.search_restaurants(text,integer)'::regprocedure
+    ),
+    'full_query_similarity', extensions.similarity(
+      public.f_unaccent(lower(restaurant.name)),
+      public.f_unaccent(lower('pho bo'))
+    ),
+    'status', restaurant.status,
+    'rpc_rows', (
+      select count(*)::int
+      from public.search_restaurants('pho bo', 10) as result
+      where result.id = restaurant.id
+    )
+  )::text
+)
+from public.restaurants as restaurant
+where restaurant.id = 'dddd4444-4444-4444-4444-444444444444';
+
 select extensions.is(
   (select count(*)::int from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444'),
   1,
