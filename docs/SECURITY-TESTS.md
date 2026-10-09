@@ -103,4 +103,20 @@ Run `supabase test db` on CI or with the local Supabase Docker stack running. No
 
 - A test query that runs with `search_path = public` must be executed separately and its result stored (for example, in a temporary table). Restore `search_path = public, extensions` immediately before invoking **any** pgTAP function. Schema-qualifying `extensions.ok()` is not enough: pgTAP's internal `_todo()` resolution uses the caller's search path, which caused `function _todo() does not exist` in `07_m4_anon_read_test.sql`.
 - Audit of SQL tests 01–07: 01 and 02 already isolate the public-only statement and restore the extension path before assertions; 03–06 never narrow the path; 07 was incorrect and now stores anon query results before restoring the path. Keep all plan counts and assertions intact.
-- Regression reproduction: fixture `dddd4444-4444-4444-4444-444444444444` is named `Test Phở`; run `select id from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444';` (T6 and T11 use this exact fixture/query). Comparing migrations shows both versions unaccent the restaurant name and query and filter active restaurants. The new RPC retained the `%` trigram check, whose acceptance threshold is a database setting; it did not guarantee a partial token match, so this existing fixture could return zero under the CI threshold. The fix adds normalized query-token matching (minimum token length 3) and a fixed similarity floor of 0.25 for restaurant fields/dishes, without changing status rules. `07_m4_anon_read_test.sql` also asserts `pho bo` finds its `Phở bò M4` dish fixture.
+- Regression reproduction in CI: `01_rls_test.sql` creates fixture `dddd4444-4444-4444-4444-444444444444` named `Test Phở` and runs `select id from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444';` as T6/T11 inside its test transaction. The transaction ends with `ROLLBACK`, so running that SELECT by itself in Cloud SQL Editor after `db push` returns no rows simply because the fixture is absent; it does not reproduce the function result. To test after push, create the fixture and run the query in one transaction, then roll back:
+
+```sql
+begin;
+insert into public.restaurants (id, name, location)
+values (
+  'b4050000-0000-4000-8000-000000000001',
+  'Test Phở',
+  extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326)
+);
+select id
+from public.search_restaurants('pho bo', 10)
+where id = 'b4050000-0000-4000-8000-000000000001';
+rollback;
+```
+
+- Comparing migrations shows both versions unaccent the restaurant name and query and filter active restaurants. The replacement still used `%`, whose threshold is a database setting, but did not guarantee a partial token match. It now matches normalized query tokens (minimum length 3) and applies an explicit 0.25 similarity floor to restaurant fields/dishes without changing status rules. `07_m4_anon_read_test.sql` separately asserts `pho bo` finds its `Phở bò M4` dish fixture.

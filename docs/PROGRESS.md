@@ -11,7 +11,7 @@
 - **Milestone đang làm:** M4 — tìm kiếm, trang chi tiết quán và danh sách review chỉ đọc.
 - **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
 - **Đã xong:** M3 theo xác nhận của người dùng; M0–M2 cũng đã hoàn tất.
-- **Đang hoàn thiện:** CI `bed7cc8` phát hiện search regression T6/T11 và lỗi `_todo()` trong test 07. Đã sửa migration chưa áp dụng cloud, tách riêng truy vấn anon khỏi pgTAP, và ghi quy tắc `search_path`; cần chạy bốn lệnh, commit/push rồi chờ CI.
+- **Đang hoàn thiện:** CI `bed7cc8` phát hiện search regression T6/T11 và lỗi `_todo()` trong test 07. Commit `ebcd822` đã sửa search và pgTAP; người dùng chạy truy vấn cloud sau push nhưng UUID fixture từ pgTAP đã rollback nên truy vấn đơn lẻ không có hàng để kiểm tra. Reproduction trong transaction đã được thêm vào SECURITY-TESTS.
 - **Giới hạn dữ liệu:** Schema hiện không có giờ mở cửa nên chưa có chip “Đang mở cửa”. Migration mới cần `supabase db push` lên cloud; không sửa migration đã áp dụng.
 - **Kiểm tra M4 follow-up:** `npm run lint`, `npx tsc --noEmit`, `npm test` (7 files / 17 tests), `npm run build` đều pass sau sửa. Build dùng `SWC_NATIVE_BINDING_CACHE=0`. pgTAP chưa chạy cục bộ vì Docker không hoạt động; CI `bed7cc8` dừng test 07 trước assertions, tổng `Files=7, Tests=77, FAIL`; sau sửa kỳ vọng 7 files / 85 assertions.
 - **Nhánh:** `main`. M4 đang làm.
@@ -33,7 +33,7 @@
 
 - **Việc:** Sửa và xác minh M4 CI follow-up.
 - **File liên quan:** `supabase/migrations/20261009100000_m4_search_and_restaurant_detail.sql`, `supabase/tests/01_rls_test.sql` (T6/T11 được giữ), `supabase/tests/07_m4_anon_read_test.sql`, `AGENTS.md`, `docs/SECURITY-TESTS.md`.
-- **Dở ở đâu:** Các test pgTAP chưa chạy cục bộ; cần push commit follow-up và nhận CI log mới. Chưa chạy `db push`, chưa sang M5.
+- **Dở ở đâu:** Cần người dùng chạy truy vấn tái hiện cùng fixture trong một transaction và cung cấp log CI `ebcd822`; pgTAP chưa chạy cục bộ do Docker. Agent không chạy `db push`; M5 chưa bắt đầu.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
@@ -119,4 +119,4 @@ E2E:             npx playwright test     # chưa cài; M9
 - 2026-10-08 CI follow-up: 01_rls_test.sql T23 now expects SQLSTATE 42501 for UPDATE of system-managed restaurant fields; privileged readbacks confirm avg_rating, review_count, and status did not change. plan(38) and the three assertion slots remain unchanged. CI database result pending user log; no db push, mutation PR, or M4.
 
 - 2026-10-08 mutation evidence: user confirmed main commit 4739d74 is green. PR #4 database job intentionally reports Files=6, Tests=77, Result=FAIL: 01 T23 and 05 R1/R3-R7 detect restored broad write grants; R2 reaches the daily-limit trigger and reports P0001 rather than expected 42501. PR remains unmerged; no db push or M4. See SECURITY-TESTS.md.
-- 2026-10-09 M4: implemented accent-insensitive/typo-tolerant search RPC, restaurant detail route/menu/maps/share, cursor-paginated public review list and anonymous privacy checks; added anon pgTAP and migration `20261009100000_m4_search_and_restaurant_detail.sql`. Follow-up keeps T6/T11 and all plans unchanged, adds deterministic token/similarity matching, stores 07 anon results before restoring the pgTAP search path; documented repeated search_path rule in AGENTS.md and SECURITY-TESTS.md. Four local commands pass; CI rerun pending. No cloud `db push`; M5 untouched.
+- 2026-10-09 M4 follow-up: user reports Cloud SQL query after push returned no rows. The queried UUID belongs to an `01_rls_test.sql` fixture created and rolled back inside pgTAP, so querying it outside that transaction cannot validate search. Added an in-transaction reproduction to `SECURITY-TESTS.md`; requested user rerun it and provide CI for `ebcd822`. Agent did not run `db push`; M5 untouched.
