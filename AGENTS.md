@@ -49,6 +49,7 @@ E2E:             npx playwright test
 - Cấu trúc theo tính năng; component → hook → repository. Component không gọi Supabase trực tiếp.
 - Mọi input và dữ liệu từ server kiểm tra bằng Zod.
 - Mọi thay đổi database đi qua migration trong `supabase/migrations/`.
+- Với pgTAP, giữ `search_path` chứa `extensions` trước mọi lời gọi pgTAP (`plan`, `ok`, `is`, `throws_ok`, `finish`...). Khi cần mô phỏng phiên chỉ có `search_path = public`, chỉ đặt path đó quanh câu SQL đang kiểm tra, lưu kết quả vào bảng tạm/biến; lập tức khôi phục `public, extensions` trước khi gọi pgTAP. Không gọi pgTAP khi path chỉ có `public`, kể cả khi viết `extensions.ok`, vì pgTAP gọi các hàm nội bộ như `_todo()` theo path của caller.
 - **Tuyệt đối không** trả `user_id` thật của review ẩn danh ra client.
 - Mỗi màn hình xử lý đủ trạng thái: đang tải, rỗng, lỗi, thành công.
 - Chuỗi giao diện đặt trong tệp i18n, không viết cứng.

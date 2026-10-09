@@ -38,8 +38,26 @@ as $$
       r.id,
       greatest(
         extensions.similarity(restaurant_text.name, search_input.term),
+        case when exists (
+          select 1
+          from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          where length(query_token.value) >= 3
+            and position(query_token.value in restaurant_text.name) > 0
+        ) then 0.5 else 0 end,
         extensions.similarity(restaurant_text.address, search_input.term),
+        case when exists (
+          select 1
+          from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          where length(query_token.value) >= 3
+            and position(query_token.value in restaurant_text.address) > 0
+        ) then 0.5 else 0 end,
         extensions.similarity(restaurant_text.province, search_input.term),
+        case when exists (
+          select 1
+          from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          where length(query_token.value) >= 3
+            and position(query_token.value in restaurant_text.province) > 0
+        ) then 0.5 else 0 end,
         coalesce(dish_matches.score, 0)
       ) as relevance
     from public.restaurants r
@@ -56,8 +74,21 @@ as $$
         select greatest(
           extensions.similarity(public.f_unaccent(lower(d.name)), search_input.term),
           coalesce((
+            select max(case when length(query_token.value) >= 3
+              and position(query_token.value in public.f_unaccent(lower(d.name))) > 0
+              then 0.5 else 0 end)
+            from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          ), 0),
+          coalesce((
             select max(extensions.similarity(public.f_unaccent(lower(alias.value)), search_input.term))
             from unnest(d.aliases) as alias(value)
+          ), 0),
+          coalesce((
+            select max(case when length(query_token.value) >= 3
+              and position(query_token.value in public.f_unaccent(lower(alias.value))) > 0
+              then 0.5 else 0 end)
+            from unnest(d.aliases) as alias(value)
+            cross join unnest(string_to_array(search_input.term, ' ')) as query_token(value)
           ), 0)
         ) as score
         from public.restaurant_dishes rd
@@ -65,12 +96,26 @@ as $$
         where rd.restaurant_id = r.id
           and (
             public.f_unaccent(lower(d.name)) % search_input.term
+            or extensions.similarity(public.f_unaccent(lower(d.name)), search_input.term) >= 0.25
             or position(search_input.term in public.f_unaccent(lower(d.name))) > 0
+            or exists (
+              select 1
+              from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+              where length(query_token.value) >= 3
+                and position(query_token.value in public.f_unaccent(lower(d.name))) > 0
+            )
             or exists (
               select 1
               from unnest(d.aliases) as alias(value)
               where public.f_unaccent(lower(alias.value)) % search_input.term
+                or extensions.similarity(public.f_unaccent(lower(alias.value)), search_input.term) >= 0.25
                 or position(search_input.term in public.f_unaccent(lower(alias.value))) > 0
+                or exists (
+                  select 1
+                  from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+                  where length(query_token.value) >= 3
+                    and position(query_token.value in public.f_unaccent(lower(alias.value))) > 0
+                )
             )
           )
       ) dish_match
@@ -79,11 +124,32 @@ as $$
       and search_input.term is not null
       and (
         restaurant_text.name % search_input.term
+        or extensions.similarity(restaurant_text.name, search_input.term) >= 0.25
         or position(search_input.term in restaurant_text.name) > 0
+        or exists (
+          select 1
+          from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          where length(query_token.value) >= 3
+            and position(query_token.value in restaurant_text.name) > 0
+        )
         or restaurant_text.address % search_input.term
+        or extensions.similarity(restaurant_text.address, search_input.term) >= 0.25
         or position(search_input.term in restaurant_text.address) > 0
+        or exists (
+          select 1
+          from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          where length(query_token.value) >= 3
+            and position(query_token.value in restaurant_text.address) > 0
+        )
         or restaurant_text.province % search_input.term
+        or extensions.similarity(restaurant_text.province, search_input.term) >= 0.25
         or position(search_input.term in restaurant_text.province) > 0
+        or exists (
+          select 1
+          from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
+          where length(query_token.value) >= 3
+            and position(query_token.value in restaurant_text.province) > 0
+        )
         or coalesce(dish_matches.score, 0) >= 0.25
       )
   )
