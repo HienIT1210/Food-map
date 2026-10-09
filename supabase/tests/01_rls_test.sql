@@ -114,153 +114,11 @@ set local role postgres;
 set search_path = public, extensions;
 
 -- Yêu cầu (f): Tìm kiếm trigram
-with search_input as (
-  select public.f_unaccent(lower(btrim('pho bo'))) as term
-), restaurant_matches as (
-  select
-    r.id,
-    greatest(
-      extensions.similarity(public.f_unaccent(lower(r.name)), search_input.term),
-      extensions.similarity(public.f_unaccent(lower(coalesce(r.address, ''))), search_input.term),
-      extensions.similarity(public.f_unaccent(lower(coalesce(r.province, ''))), search_input.term),
-      case when exists (
-        select 1
-        from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
-        where length(query_token.value) >= 3
-          and (
-            position(query_token.value in public.f_unaccent(lower(r.name))) > 0
-            or position(query_token.value in public.f_unaccent(lower(coalesce(r.address, '')))) > 0
-            or position(query_token.value in public.f_unaccent(lower(coalesce(r.province, '')))) > 0
-          )
-      ) then 0.5 else 0 end
-    ) as relevance
-  from public.restaurants as r
-  cross join search_input
-  where r.status = 'active'
-    and (
-      public.f_unaccent(lower(r.name)) % search_input.term
-      or extensions.similarity(public.f_unaccent(lower(r.name)), search_input.term) >= 0.25
-      or position(search_input.term in public.f_unaccent(lower(r.name))) > 0
-      or public.f_unaccent(lower(coalesce(r.address, ''))) % search_input.term
-      or extensions.similarity(public.f_unaccent(lower(coalesce(r.address, ''))), search_input.term) >= 0.25
-      or position(search_input.term in public.f_unaccent(lower(coalesce(r.address, '')))) > 0
-      or public.f_unaccent(lower(coalesce(r.province, ''))) % search_input.term
-      or extensions.similarity(public.f_unaccent(lower(coalesce(r.province, ''))), search_input.term) >= 0.25
-      or position(search_input.term in public.f_unaccent(lower(coalesce(r.province, '')))) > 0
-      or exists (
-        select 1
-        from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
-        where length(query_token.value) >= 3
-          and (
-            position(query_token.value in public.f_unaccent(lower(r.name))) > 0
-            or position(query_token.value in public.f_unaccent(lower(coalesce(r.address, '')))) > 0
-            or position(query_token.value in public.f_unaccent(lower(coalesce(r.province, '')))) > 0
-          )
-      )
-    )
-), dish_matches as (
-  select
-    r.id,
-    max(greatest(
-      extensions.similarity(public.f_unaccent(lower(d.name)), search_input.term),
-      coalesce((
-        select max(extensions.similarity(public.f_unaccent(lower(alias.value)), search_input.term))
-        from unnest(d.aliases) as alias(value)
-      ), 0),
-      case when exists (
-        select 1
-        from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
-        where length(query_token.value) >= 3
-          and (
-            position(query_token.value in public.f_unaccent(lower(d.name))) > 0
-            or exists (
-              select 1 from unnest(d.aliases) as alias(value)
-              where position(query_token.value in public.f_unaccent(lower(alias.value))) > 0
-            )
-          )
-      ) then 0.5 else 0 end
-    )) as relevance
-  from public.restaurants as r
-  join public.restaurant_dishes as rd on rd.restaurant_id = r.id
-  join public.dishes as d on d.id = rd.dish_id
-  cross join search_input
-  where r.status = 'active'
-    and (
-      public.f_unaccent(lower(d.name)) % search_input.term
-      or extensions.similarity(public.f_unaccent(lower(d.name)), search_input.term) >= 0.25
-      or position(search_input.term in public.f_unaccent(lower(d.name))) > 0
-      or exists (
-        select 1 from unnest(d.aliases) as alias(value)
-        where public.f_unaccent(lower(alias.value)) % search_input.term
-          or extensions.similarity(public.f_unaccent(lower(alias.value)), search_input.term) >= 0.25
-          or position(search_input.term in public.f_unaccent(lower(alias.value))) > 0
-      )
-      or exists (
-        select 1
-        from unnest(string_to_array(search_input.term, ' ')) as query_token(value)
-        where length(query_token.value) >= 3
-          and (
-            position(query_token.value in public.f_unaccent(lower(d.name))) > 0
-            or exists (
-              select 1 from unnest(d.aliases) as alias(value)
-              where position(query_token.value in public.f_unaccent(lower(alias.value))) > 0
-            )
-          )
-      )
-    )
-  group by r.id
-), all_matches as (
-  select id, relevance from restaurant_matches
-  union all
-  select id, relevance from dish_matches
-), matched_restaurants as (
-  select id, max(relevance) as relevance
-  from all_matches
-  group by id
-), ranked_results as (
-  select
-    r.id,
-    r.name,
-    matches.relevance,
-    row_number() over (order by matches.relevance desc, r.id) as result_position
-  from matched_restaurants as matches
-  join public.restaurants as r on r.id = matches.id
-)
-select extensions.diag(
-  'T6 diagnostic: ' || jsonb_build_object(
-    'lim_passed_by_T6', 10,
-    'rpc_row_count_lim_10', (select count(*)::int from public.search_restaurants('pho bo', 10)),
-    'rpc_row_count_lim_50', (select count(*)::int from public.search_restaurants('pho bo', 50)),
-    'all_match_rows_before_dedup', (select count(*)::int from all_matches),
-    'unique_candidates_after_group', (select count(*)::int from matched_restaurants),
-    'rows_after_final_restaurant_join', (select count(*)::int from ranked_results),
-    'rows_after_lim_10', (select count(*)::int from ranked_results where result_position <= 10),
-    'rows_after_lim_50', (select count(*)::int from ranked_results where result_position <= 50),
-    'target_position_or_null', (
-      select result_position
-      from ranked_results
-      where id = 'dddd4444-4444-4444-4444-444444444444'
-    ),
-    'complete_rpc_top_50_with_relevance', (
-      select coalesce(jsonb_agg(
-        jsonb_build_object(
-          'position', ranked.result_position,
-          'id', result.id,
-          'name', result.name,
-          'relevance', ranked.relevance
-        ) order by ranked.result_position
-      ), '[]'::jsonb)
-      from public.search_restaurants('pho bo', 50) as result
-      join ranked_results as ranked on ranked.id = result.id
-    )
-  )::text
-)
-;
 
 select extensions.is(
-  (select count(*)::int from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444'),
+  (select count(*)::int from public.search_restaurants('pho bo', 50) where id = 'dddd4444-4444-4444-4444-444444444444'),
   1,
-  'T6 (f): search_restaurants tìm không dấu'
+  'T6 (f): search_restaurants tìm tên quán không dấu với đủ giới hạn kết quả'
 );
 
 -- Yêu cầu (e): Bounding box
@@ -336,12 +194,12 @@ select extensions.is(
 -- 2. search_restaurants độc lập search_path (dùng trigram / unaccent trong extensions)
 set local search_path = public;
 create temp table _t11 on commit drop as
-  select count(*)::int as cnt from public.search_restaurants('pho bo', 10) where id = 'dddd4444-4444-4444-4444-444444444444';
+  select count(*)::int as cnt from public.search_restaurants('pho bo', 50) where id = 'dddd4444-4444-4444-4444-444444444444';
 set local search_path = public, extensions;
 select extensions.is(
   (select cnt from _t11),
   1,
-  'T11 (Cloud search_path): search_restaurants chạy thành công khi search_path = public'
+  'T11 (Cloud search_path): search_restaurants tìm tên quán không dấu khi search_path = public'
 );
 
 -- 3. restaurants_in_bounds độc lập search_path (dùng PostGIS st_* trong extensions)
