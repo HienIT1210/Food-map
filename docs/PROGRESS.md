@@ -8,13 +8,13 @@
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone đang làm:** M4 — tìm kiếm, trang chi tiết quán và danh sách review chỉ đọc.
+- **Milestone hiện tại:** M4 — tìm kiếm, trang chi tiết quán và danh sách review chỉ đọc. Code, kiểm tra local, CI và migration đã được xác nhận; chưa bắt đầu M5.
 - **Đã có trong code:** MapLibre, clustering, nút vị trí, worker postinstall, attribution control, dữ liệu seed.
 - **Đã xong:** M3 theo xác nhận của người dùng; M0–M2 cũng đã hoàn tất.
-- **Đang hoàn thiện:** CI `bed7cc8` phát hiện search regression T6/T11 và lỗi `_todo()` trong test 07. Commit `ebcd822` đã sửa search và pgTAP; người dùng chạy truy vấn cloud sau push nhưng UUID fixture từ pgTAP đã rollback nên truy vấn đơn lẻ không có hàng để kiểm tra. Reproduction trong transaction đã được thêm vào SECURITY-TESTS.
-- **Giới hạn dữ liệu:** Schema hiện không có giờ mở cửa nên chưa có chip “Đang mở cửa”. Migration mới cần `supabase db push` lên cloud; không sửa migration đã áp dụng.
-- **Kiểm tra M4 follow-up:** `npm run lint`, `npx tsc --noEmit`, `npm test` (7 files / 17 tests), `npm run build` đều pass sau sửa. Build dùng `SWC_NATIVE_BINDING_CACHE=0`. pgTAP chưa chạy cục bộ vì Docker không hoạt động; CI `bed7cc8` dừng test 07 trước assertions, tổng `Files=7, Tests=77, FAIL`; sau sửa kỳ vọng 7 files / 85 assertions.
-- **Nhánh:** `main`. M4 đang làm.
+- **Đã xác nhận:** Người dùng báo CI đã pass và đã chạy `db push` lên cloud. Test T6/T11 dùng `lim=50`; CI trước đó xác nhận `Test Phở` ở vị trí 11 với `lim=10`, nên test dùng limit nhỏ bị ảnh hưởng bởi top-N chứ RPC không lỗi.
+- **Còn lại:** Chưa có xác nhận kiểm tra UI thủ công sau `db push`; checklist ở cuối file. Không có thay đổi schema chưa áp dụng được ghi nhận trong nhánh hiện tại.
+- **Kiểm tra local:** `npm run lint`, `npx tsc --noEmit`, `npm test` (7 files / 17 tests), `npm run build` đều pass trên `b20d016`; build dùng `SWC_NATIVE_BINDING_CACHE=0` do cache SWC mặc định trên Windows bị quyền DACL.
+- **Nhánh:** `main`, working tree sạch tại `b20d016` lúc bàn giao trạng thái này.
 
 ## 2. Tiến độ milestone
 
@@ -22,7 +22,7 @@
 - [x] M1 — Schema, RLS, view công khai, RPC, seed; security follow-up CI xanh (38+4 pgTAP assertions)
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
 - [x] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (người dùng xác nhận đã xong)
-- [ ] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review (code và local unit checks đang triển khai; chờ migration/CI và tự kiểm tra tay)
+- [x] M4 — Tìm kiếm có dấu/không dấu, chi tiết quán, danh sách review; local checks và CI pass theo xác nhận người dùng, migration đã `db push`; còn checklist UI thủ công chưa được xác nhận
 - [ ] M5 — Viết/sửa/xóa review, ảnh (xóa EXIF), ẩn danh, giới hạn chống lạm dụng
 - [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
 - [ ] M7 — Chỉ đường, lưu quán, chia sẻ
@@ -31,16 +31,16 @@
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** Sửa và xác minh M4 CI follow-up.
-- **File liên quan:** `supabase/migrations/20261009100000_m4_search_and_restaurant_detail.sql`, `supabase/tests/01_rls_test.sql` (T6/T11 được giữ), `supabase/tests/07_m4_anon_read_test.sql`, `AGENTS.md`, `docs/SECURITY-TESTS.md`.
-- **Dở ở đâu:** Cần người dùng chạy truy vấn tái hiện cùng fixture trong một transaction và cung cấp log CI `ebcd822`; pgTAP chưa chạy cục bộ do Docker. Agent không chạy `db push`; M5 chưa bắt đầu.
+- **Việc:** M4 code/CI/database đã xác nhận; chờ kiểm tra tay sau `db push`.
+- **File liên quan:** `src/features/restaurants/`, `src/features/reviews/`, `supabase/tests/01_rls_test.sql`, `supabase/tests/07_m4_anon_read_test.sql`, `docs/SECURITY-TESTS.md`.
+- **Dở ở đâu:** Chưa có kết quả kiểm tra trực tiếp trên UI và Network của môi trường cloud. Không còn chẩn đoán SQL tạm; `plan(38)` giữ nguyên. M5 chưa bắt đầu.
 - **Có commit `wip:` chưa:** Không.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Commit và push M4; đọc log CI hai job do người dùng cung cấp, đặc biệt database `Files=7, Tests=85, Result: PASS`.
-2. Nếu CI đỏ, sửa nguyên nhân gốc và chạy lại đủ bốn lệnh; không nới bảo mật hoặc xóa test.
-3. Sau khi người dùng xác nhận CI xanh, áp dụng migration mới bằng `npx supabase db push` theo xác nhận của họ, rồi làm các bước kiểm tra tay bên dưới; không sang M5.
+1. Tự kiểm tra tìm `pho bo` và lỗi chính tả nhẹ trên cloud; xác nhận kết quả món/quán rồi chọn kết quả để mở trang chi tiết.
+2. Kiểm tra chi tiết quán, phân trang/sắp xếp review và trạng thái rỗng/lỗi; trong Network xác nhận review ẩn danh không có `user_id`.
+3. Ghi kết quả kiểm tra tay vào PROGRESS; chỉ bắt đầu M5 khi người dùng giao việc mới. Migration đã được người dùng `db push`; không chạy lại.
 
 ## 5. Lệnh chạy / kiểm tra
 
@@ -91,11 +91,11 @@ E2E:             npx playwright test     # chưa cài; M9
 - `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này.
 - `next dev` tự thêm khối luật Next.js vào cuối `AGENTS.md`; nội dung luật repo gốc được giữ nguyên.
 - Deno Edge Functions trong `supabase/functions` được exclude khỏi `tsconfig.json` của Next.js để tránh xung đột kiểu type giữa Node và Deno.
-- M4 tạo migration mới `20261009100000_m4_search_and_restaurant_detail.sql` (thay RPC `search_restaurants`, thêm `restaurant_detail`, index trigram/cursor); **chưa `db push`**. Search/detail RPC là `security invoker`, có `set search_path = public, extensions`, grant execute tường minh cho `anon, authenticated`.
+- M4 dùng migration `20261009100000_m4_search_and_restaurant_detail.sql` (thay RPC `search_restaurants`, thêm `restaurant_detail`, index trigram/cursor); người dùng xác nhận đã `db push`. Search/detail RPC là `security invoker`, có `set search_path = public, extensions`, grant execute tường minh cho `anon, authenticated`.
 - M4 review client chỉ query `public_reviews` với danh sách cột tường minh và schema strict; không chọn `author_id`, `user_id` hoặc avatar, và nhãn ẩn danh không có liên kết hồ sơ. Có unit test kiểm tra request/response giả lập và pgTAP chạy dưới `anon`.
 - Schema hiện không có cột/nguồn ảnh cho quán hoặc review; M4 chỉ hiển thị danh sách món, chưa thêm ảnh hay triển khai viết review (M5).
 - Hướng dẫn tự kiểm tra M4 sau `db push`: (1) tìm `pho bo`, xác nhận món/quán “phở bò” xuất hiện; thử một lỗi nhỏ như `pho bee`, tên quán và địa chỉ không dấu; (2) chọn kết quả, xác nhận bản đồ bay tới pin; bấm pin/thẻ “Xem chi tiết”; (3) xem địa chỉ, điểm, số review, món/giá; thử Google Maps, Apple Maps và Chia sẻ; (4) đổi review giữa mới nhất/hữu ích/sao cao/sao thấp, tải trang kế; (5) dùng fixture có review ẩn danh, xác nhận “Thực khách ẩn danh” và không có link hồ sơ; trong DevTools Network mở phản hồi `public_reviews`, xác nhận không có khóa/giá trị `user_id`; (6) thử trạng thái rỗng và ngắt mạng để xem lỗi/thử lại. Không tạo review mới vì viết review thuộc M5.
-- M4 local checks 2026-10-09: lint pass, typecheck pass, npm test pass (7 files / 17 tests), build pass với `SWC_NATIVE_BINDING_CACHE=0` (temporary cache; cache mặc định trên Windows bị DACL/owner chặn). CI và pgTAP chưa xác nhận.
+- M4 local checks 2026-10-09: lint, typecheck, npm test (7 files / 17 tests), build đều pass với `SWC_NATIVE_BINDING_CACHE=0`; người dùng xác nhận CI pass và migration đã được đẩy lên cloud.
 
 ## 9. Nhật ký bàn giao
 
@@ -119,4 +119,4 @@ E2E:             npx playwright test     # chưa cài; M9
 - 2026-10-08 CI follow-up: 01_rls_test.sql T23 now expects SQLSTATE 42501 for UPDATE of system-managed restaurant fields; privileged readbacks confirm avg_rating, review_count, and status did not change. plan(38) and the three assertion slots remain unchanged. CI database result pending user log; no db push, mutation PR, or M4.
 
 - 2026-10-08 mutation evidence: user confirmed main commit 4739d74 is green. PR #4 database job intentionally reports Files=6, Tests=77, Result=FAIL: 01 T23 and 05 R1/R3-R7 detect restored broad write grants; R2 reaches the daily-limit trigger and reports P0001 rather than expected 42501. PR remains unmerged; no db push or M4. See SECURITY-TESTS.md.
-- 2026-10-09 M4 rank/limit confirmed by CI `b1dc6e7`: 34 raw match rows -> 21 unique candidates -> 21 final joined rows; `lim=10` returns 10 and excludes `Test Phở` at position 11, while `lim=50` returns 21 including it. Ten seed restaurants selling exact Phở Bò rank above the name-only Test Phở. This is expected relevance ordering, so changed T6/T11 test limits to 50 rather than changing RPC ranking. Removed the unused search-candidate rewrite migration and all temporary `diag()` SQL. `plan(38)` unchanged. Next: run four local commands, commit/push, inspect CI; if green, wait for user-controlled `db push`. No M5.
+- 2026-10-09 user confirms M4 CI pass and cloud `db push` complete. M4 local checks pass; manual UI/Network checklist remains unconfirmed. No M5 work started.
