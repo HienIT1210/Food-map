@@ -3,13 +3,15 @@
 
 -- ---------------------------------------------------------------------------
 -- 1. Column privileges: created_by must never be readable through PostgREST.
---    The activity feed, search and detail RPCs expose only safe columns, but the
---    table itself allowed `select created_by` for anon/authenticated, which leaks
---    the id of the account that pinned the restaurant without exposing any review.
+--    PostgreSQL has no `REVOKE ... ON COLUMN` syntax, and revoking one column
+--    while the table-level SELECT grant survives would do nothing anyway. The
+--    table grant is therefore dropped and SELECT is re-granted explicitly for
+--    every column except created_by. The column list is taken from the table
+--    definition in 20261004114000_init_schema.sql; a new column added later must
+--    be granted here by hand (see docs/ASSUMPTIONS.md M6-11).
 -- ---------------------------------------------------------------------------
 revoke select, insert, update, delete, truncate, references, trigger
   on table public.restaurants from public, anon, authenticated;
-revoke select on column public.restaurants.created_by from public, anon, authenticated;
 grant select (
   id, name, address, province, location, source, status,
   avg_rating, review_count, created_at

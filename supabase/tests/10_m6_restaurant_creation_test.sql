@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select extensions.plan(43);
+select extensions.plan(49);
 
 -- First CI run evidence: print every new signature so a mismatch is never a bare 42883.
 select extensions.diag('>>> create_restaurant args: '
@@ -369,6 +369,79 @@ select extensions.ok(
   not has_column_privilege('anon', 'public.restaurants', 'created_by', 'SELECT')
   and has_column_privilege('anon', 'public.restaurants', 'name', 'SELECT'),
   'M6-43: anon keeps the safe restaurant columns but not created_by'
+);
+
+-- ---------------------------------------------------------------------------
+-- M6-44..M6-49: the column-level SELECT contract. The list is compared against the catalog so a
+-- column added later without an explicit grant cannot slip through unnoticed.
+-- ---------------------------------------------------------------------------
+select extensions.diag('>>> restaurants columns without SELECT for anon: '
+  || coalesce((
+       select string_agg(c.column_name, ', ' order by c.column_name)
+       from information_schema.columns c
+       where c.table_schema = 'public' and c.table_name = 'restaurants'
+         and not has_column_privilege('anon', 'public.restaurants', c.column_name, 'SELECT')
+     ), '(none)'));
+select extensions.diag('>>> restaurants columns without SELECT for authenticated: '
+  || coalesce((
+       select string_agg(c.column_name, ', ' order by c.column_name)
+       from information_schema.columns c
+       where c.table_schema = 'public' and c.table_name = 'restaurants'
+         and not has_column_privilege('authenticated', 'public.restaurants', c.column_name, 'SELECT')
+     ), '(none)'));
+select extensions.diag('>>> column privileges actually granted on public.restaurants: '
+  || coalesce((
+       select string_agg(grantee || ' on ' || column_name, ', ' order by grantee, column_name)
+       from information_schema.column_privileges
+       where table_schema = 'public' and table_name = 'restaurants'
+         and grantee in ('anon', 'authenticated')
+         and privilege_type = 'SELECT'
+     ), '(none)'));
+
+select extensions.ok(
+  not has_table_privilege('anon', 'public.restaurants', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.restaurants', 'SELECT'),
+  'M6-44: neither API role holds table-level SELECT on restaurants'
+);
+select extensions.ok(
+  has_column_privilege('anon', 'public.restaurants', 'id', 'SELECT')
+  and has_column_privilege('anon', 'public.restaurants', 'status', 'SELECT')
+  and has_column_privilege('authenticated', 'public.restaurants', 'review_count', 'SELECT')
+  and has_column_privilege('authenticated', 'public.restaurants', 'created_at', 'SELECT'),
+  'M6-45: the public columns stay readable for both roles'
+);
+select extensions.ok(
+  (
+    select count(*)::integer
+    from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = 'restaurants'
+      and c.column_name <> 'created_by'
+      and not has_column_privilege('anon', 'public.restaurants', c.column_name, 'SELECT')
+  ) = 0,
+  'M6-46: every non-created_by column is granted to anon'
+);
+select extensions.ok(
+  (
+    select count(*)::integer
+    from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = 'restaurants'
+      and c.column_name <> 'created_by'
+      and not has_column_privilege('authenticated', 'public.restaurants', c.column_name, 'SELECT')
+  ) = 0,
+  'M6-47: every non-created_by column is granted to authenticated'
+);
+
+set local role anon;
+set local "request.jwt.claims" to '{"role":"anon"}';
+select extensions.throws_ok(
+  'select created_by from public.restaurants',
+  '42501', null, 'M6-48: anon reading created_by gets a privilege error, not rows'
+);
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
+select extensions.throws_ok(
+  'select created_by from public.restaurants',
+  '42501', null, 'M6-49: authenticated reading created_by gets a privilege error, not rows'
 );
 
 select * from extensions.finish(true);
