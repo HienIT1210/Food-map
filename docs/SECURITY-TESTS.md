@@ -2,6 +2,58 @@
 
 This document records the M1 RLS hardening tests and the deliberate mutation checks run against GitHub Actions. Mutation PRs were closed without merging; the intended implementation is in PR #2.
 
+## M6 — restaurant creation, duplicate guard and reports (`supabase/tests/10_m6_restaurant_creation_test.sql`, `plan(43)`)
+
+Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are sequential `M6-01 … M6-43`; the count is produced by a parser that walks balanced parentheses, not by hand.
+
+| Assertion | Rule under test |
+|---|---|
+| M6-01 | `authenticated` cannot INSERT `restaurants` directly (42501) |
+| M6-02 | `authenticated` cannot UPDATE `restaurants` directly (42501) |
+| M6-03 | `authenticated` cannot INSERT `restaurant_dishes` directly (42501) |
+| M6-04 | The denied insert created no row, read back as `postgres` |
+| M6-05 | `anon` cannot execute `create_restaurant` (42501) |
+| M6-06 | `anon` cannot execute `report_restaurant` (42501) |
+| M6-07 | `anon` cannot execute `check_duplicate_restaurant` (42501) |
+| M6-08 | Duplicate lookup finds a same/similar name within 50 m |
+| M6-09 | The returned distance is inside the 50 m radius |
+| M6-10 | Same name far away (>50 m) is not a duplicate |
+| M6-11 | Matching ignores accents and letter case (RES-03, `f_unaccent` + `pg_trgm`) |
+| M6-12 | A different name inside the radius is not a duplicate |
+| M6-13 | `authenticated` has no SELECT on `restaurants.created_by` |
+| M6-14 | A signed-in user can create a restaurant |
+| M6-15 | `source='user'`, `status='active'`, `created_by = auth.uid()` (set by the M3 trigger) |
+| M6-16 | `create_restaurant` accepts the optional dish list |
+| M6-17 | Spoofed `created_by`/`status`/`source`/`avg_rating` **inside `p_dishes`** are ignored |
+| M6-18 | The accepted dish is linked with its price |
+| M6-19 | Out-of-range coordinates are refused |
+| M6-20 | An unconfirmed duplicate is refused (`P0001`) |
+| M6-21 | That refusal carries `hint = duplicate_restaurant`, so the client can distinguish it |
+| M6-22 | `p_confirm_new = true` ("this is a different place") creates the restaurant |
+| M6-23 | The daily quota refuses the next restaurant (`P0001`) |
+| M6-24 | The quota error matches the documented daily-limit message |
+| M6-25 | A user cannot report a restaurant they created (42501) |
+| M6-26 | A reason outside the three allowed values is refused |
+| M6-27 | A banned account cannot create a restaurant (42501) |
+| M6-28 | A banned account cannot report a restaurant (42501) |
+| M6-29 | One account can report a restaurant it did not create |
+| M6-30 | The report is stored as exactly one distinct reporter |
+| M6-31 | **threshold−1** distinct reporters: status equals the pre-report snapshot (still `active`) |
+| M6-32 | The same account reporting the same restaurant again is refused (`23505`) |
+| M6-33 | That repeated attempt leaves the restaurant `active` — one person never counts twice |
+| M6-34/35/36 | Three distinct verified reporters can each file their report |
+| M6-37 | At the threshold the restaurant becomes `hidden_pending_review` |
+| M6-38 | The status differs from the pre-report snapshot (before/after, not a chosen constant) |
+| M6-39 | A control assertion: an `active` restaurant in the same bbox is still visible |
+| M6-40 | A hidden restaurant disappears from `restaurants_in_bounds` |
+| M6-41 | A hidden restaurant disappears from `search_restaurants` |
+| M6-42 | A user with no reports cannot read anyone else's reports |
+| M6-43 | `anon` keeps the safe restaurant columns but has no SELECT on `created_by` |
+
+**Rule implemented outside 10 but recorded here:** the `created_by` column is revoked from `anon`/`authenticated`, so `select created_by from restaurants` over PostgREST fails with 42501 and no map/search/detail response can carry it. `restaurant_detail(uuid)` never selected the column; `restaurants_in_bounds`, `search_restaurants`, `find_duplicate_restaurants` and `check_duplicate_restaurant` return only safe fields.
+
+**Known gaps (stated, not hidden):** the pgTAP file has never run locally because this machine has no Docker, so all M6 database assertions are unverified until CI runs them. The 50 m radius is exercised with one near pair and one far pair; the similarity threshold's 0.4 boundary is not probed at its exact edge.
+
 ## Mutation Evidence
 
 | Requirement | Temporary mutation | Expected red tests | CI evidence |

@@ -2,18 +2,18 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-09 bởi DeepSeek Harness (tiếp quản M5, vòng CI thứ 2)
+**Cập nhật lần cuối:** 2026-10-10 bởi DeepSeek Harness (code M6 xong, chờ CI)
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone hiện tại:** M5 — viết/sửa/xóa review, upload ảnh (xóa EXIF), ẩn danh, "Hữu ích", giới hạn chống lạm dụng.
-- **M4:** CI xanh và migration `20261009100000_m4_search_and_restaurant_detail.sql` đã `db push` lên cloud (người dùng xác nhận).
-- **Đã xong theo commit:** M0–M3 (người dùng xác nhận), M4 (CI xanh + đã push).
-- **M5 nằm trong commit `2d3f083`** (`feat: add M5 review writing and photos`): migration `20261009150000_m5_review_writes.sql`, `supabase/tests/08_m5_review_write_test.sql`, `src/features/reviews/*` (ReviewComposer, ReviewList, ReviewCard, MyReviews, image-processing, repository, types), `ProfileView`, i18n `vi.json`/`en.json`.
-- **Còn lại:** commit M5 chưa push; CI (job `verify` + job `database`) chưa xác nhận; migration M5 chưa `db push`; kiểm tra tay M5 chưa chạy.
-- **Kiểm tra local phiên này (2026-10-09):** `npm run lint` pass; `npx tsc --noEmit` pass; `npm test` pass (8 files / 18 tests); `npm run build` pass. `npm test` và `npm run build` phải chạy ngoài sandbox — xem mục 8.
+- **Milestone hiện tại:** M6 — Thêm quán bằng ghim, kiểm tra trùng, báo "đóng cửa/sai vị trí" (RES-02, RES-03, RES-04, §6.9, §7.1, §7.3). **Code + migration + test đã viết xong**; CI database chưa chạy các assertion M6, chưa `db push`.
+- **M5:** CI **xanh** (người dùng xác nhận) và migration `20261009150000_m5_review_writes.sql` **đã `db push`** lên cloud (người dùng xác nhận). Bốn lệnh local pass trên `765361e`.
+- **M5 — DoD:** **chờ kiểm tra tay**. Checklist 11 bước ở mục 5.2 chưa được người dùng xác nhận, nên DoD M5 **chưa được tick** (`[~]` trong mục 2).
+- **M4 và trước đó:** M0–M4 xong (M3/M4 CI xanh, migration đã push theo xác nhận của người dùng).
+- **Bước 0 của M6 đã làm:** rà quyền cột trên `public.restaurants` — `created_by` **đọc được** qua PostgREST trước M6 (lộ danh tính người ghim quán) nên đã bị thu hồi ở migration M6; `restaurants_in_bounds`, `search_restaurants`, `restaurant_detail` đã kiểm tra và **không** trả `created_by`; `check_duplicate_restaurant` viết lại chỉ trả cột an toàn. Xem mục 6 và `docs/SECURITY-TESTS.md`.
+- **Nhánh mutation cũ:** `test/m5-write-rule-mutation` (`fedf3af`) đã **cũ** (chứa chữ ký `smallint` và `delete from storage.objects`) — **người dùng cần xóa**; chưa mở PR mutation nào.
 
 ## 2. Tiến độ milestone
 
@@ -22,18 +22,24 @@
 - [x] M2 — Xác thực (Google/Email), khách, hồ sơ, xóa tài khoản (4/4 pgTAP tests)
 - [x] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (người dùng xác nhận đã xong)
 - [x] M4 — Tìm kiếm có/không dấu, chi tiết quán, danh sách review; CI xanh, migration đã `db push`; checklist UI thủ công còn chờ
-- [ ] M5 — Code + migration + test đã có; đang chờ CI xanh, `db push` và kiểm tra tay. **Chưa xác nhận DoD.**
-- [ ] M6 — Thêm quán bằng ghim, kiểm tra trùng
+- [~] M5 — CI **xanh** + migration **đã `db push`**; **chờ kiểm tra tay 11 bước ở mục 5.2** thì mới tick DoD
+- [~] M6 — Code/migration/test xong (`20261010090000`, pgTAP `10` = 43 assertion, UI ghim + form + kiểm trùng + báo cáo); **chờ CI xanh + `db push` + kiểm tra tay mục 5.3**
 - [ ] M7 — Chỉ đường, lưu quán, chia sẻ
 - [ ] M8 — Báo cáo, chặn, kiểm duyệt, trang quản trị, pháp lý
 - [ ] M9 — PWA hoàn chỉnh, E2E, tối ưu, triển khai
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** M5. Migration M5 đã được sửa trực tiếp (chưa áp dụng cloud nên còn được phép sửa file).
-- **File liên quan:** `supabase/migrations/20261009150000_m5_review_writes.sql`, `supabase/tests/01_rls_test.sql`, `supabase/tests/05_security_privileges_test.sql`, `supabase/tests/09_m5_review_rules_test.sql` (mới), `supabase/functions/delete-account/index.ts`, `docs/SECURITY-TESTS.md`.
-- **Dở ở chỗ nào / vì sao dừng:** CI database chưa chạy lại sau các sửa đổi M5; pgTAP không chạy được ở máy Windows này (không Docker). Mutation check cho quy tắc bảo mật mới còn phải chạy trên nhánh riêng và dán log CI.
-- **Có commit `wip:` chưa:** Không.
+- **Việc:** M6 — thêm quán bằng ghim, kiểm tra trùng, báo cáo quán. Migration + pgTAP + giao diện đã viết xong trong phiên này.
+- **File liên quan:** `supabase/migrations/20261010090000_m6_restaurant_creation_and_reports.sql`, `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(43)`), `src/features/restaurants/{repository,types,types.test}.ts`, `src/features/restaurants/hooks/useDuplicateCheck.ts`, `src/features/restaurants/components/{AddRestaurantFlow,RestaurantReport,RestaurantDetail}.tsx`, `src/features/map/components/MapComponent.tsx`, `src/messages/{vi,en}.json`, `docs/{ASSUMPTIONS,SECURITY-TESTS}.md`.
+- **Dở ở chỗ nào / vì sao dừng:** CI database **chưa từng chạy** các assertion M6 (máy này không có Docker). Chưa `db push`. 3 điểm tôi **chưa tự kiểm chứng được** và cần CI trả lời: (a) `has_column_privilege(..., 'created_by', 'SELECT')` sau khi thu hồi quyền cột; (b) `execute` của `check_duplicate_restaurant` sau khi đổi chữ ký (float); (c) giá trị 0.4 của ngưỡng tương đồng với cặp tên `'M6 Bún'` / `'m6 bun'` — nếu `pg_trgm` cho điểm dưới ngưỡng thì M6-08/M6-11 sẽ đỏ và tôi sẽ hạ ngưỡng có căn cứ, không sửa test cho dễ qua.
+- **Có commit `wip:` chưa:** Không (đã commit đầy đủ).
+
+## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
+
+1. Push và chờ CI; nếu job `database` đỏ, đọc `diag()` (chữ ký 4 hàm M6) rồi sửa theo đúng nguyên nhân, thêm `diag()` mới nếu cần bằng chứng.
+2. Người dùng chạy checklist kiểm tra tay M6 ở mục 5.3, rồi tự `supabase db push` (agent không chạy).
+3. Kiểm tra tay M5 (11 bước, mục 5.2) nếu chưa làm — M5 mới chỉ có CI xanh, DoD còn chờ. **Không sang M7.**
 
 ### 3.1. Hai file agent trước để dở và cách xử lý
 
@@ -147,6 +153,34 @@ E2E:             npx playwright test     # chưa cài; M9
 - **`09_m5_review_rules_test.sql` (mới, `plan(16)`):** quyền RPC của anon, quyền bảng của authenticated, điều kiện ẩn danh (đủ tuổi + đã xác minh email), một review cho mỗi (người dùng, quán, món), tối đa 5 ảnh, không tự vote, `helpful_count` tính từ bảng vote.
 - **`docs/PRIVACY-DESIGN.md`:** ghi nhận rủi ro `storage.objects.owner_id` gắn `auth.uid()` kể cả với review ẩn danh, kèm bằng chứng tài liệu Supabase, cách tự kiểm chứng sau `db push`, và 3 hướng xử lý đề xuất.
 
+## 6. Thay đổi M6 trong phiên này
+- **Migration `20261010090000_m6_restaurant_creation_and_reports.sql`** (mới, chưa `db push`):
+  1. Thu hồi toàn bộ quyền bảng trên `restaurants`/`restaurant_dishes` khỏi `public, anon, authenticated`, rồi **cấp lại SELECT theo cột** cho `anon, authenticated` — **không** cấp cột `created_by` (lộ danh tính người ghim quán).
+  2. Ràng buộc `restaurants_lat_lng_range` (lat −90..90, lng −180..180) bằng `st_y/st_x`.
+  3. `find_duplicate_restaurants(name, lat, lng, radius_meters, similarity_threshold)` — truy vấn dùng chung, `security invoker`, `set search_path = public, extensions`, chỉ `execute` cho `authenticated`.
+  4. `check_duplicate_restaurant(name text, lat float, lng float)` — đúng chữ ký §7.3, trả `id, name, address, distance_meters` (**bỏ cột `similarity`** để đúng §7.3 và không trả `created_by`).
+  5. `create_restaurant(p_name, p_address, p_lat, p_lng, p_province, p_dishes jsonb, p_confirm_new boolean)` — `security definer`, lấy người gọi từ `auth.uid()`; kiểm tra đăng nhập, không bị ban, tên/địa chỉ/tỉnh độ dài, toạ độ hợp lệ, `p_dishes` là mảng ≤ 10 phần tử với `dish_id` tồn tại và `price_vnd >= 0`; **tự kiểm trùng phía server**; `pg_advisory_xact_lock` theo người gọi; insert rồi liên kết `restaurant_dishes`. Giới hạn 5 quán/ngày do trigger `check_restaurant_limits()` có từ M3 (`P0001`).
+  6. `report_restaurant(p_restaurant_id, p_reason)` — chỉ `authenticated`, không bị ban, `reason` ∈ {`closed`,`wrong_location`,`wrong_info`}, không tự báo quán mình tạo; ghi `reports` với `target_type='restaurant'` (unique `(reporter_id, target_type, target_id)` giữ nguyên nghĩa "mỗi người một báo cáo mỗi quán").
+  7. Trigger `trg_enforce_restaurant_report_threshold` — đếm **người báo khác nhau** (đã xác minh email, không ban, ≥ 24h, bỏ qua `dismissed`); đủ `app.restaurant_report_threshold` (mặc định 3) thì `status = 'hidden_pending_review'`.
+- **pgTAP `supabase/tests/10_m6_restaurant_creation_test.sql`**: `plan(43)`, nhãn tuần tự `M6-01…M6-43` (đếm bằng script duyệt ngoặc cân bằng), 4 `diag()` in chữ ký hàm mới, fixture dải `a606…`, có ca "ngưỡng−1 → vẫn active", "đủ ngưỡng → hidden", "một người báo lại không tính thêm", snapshot trước/sau cho `status`, và control assertion M6-39 để M6-40 không thể xanh một cách vô nghĩa.
+- **Giao diện:** `AddRestaurantFlow` (ghim giữa bản đồ → form Zod + react-hook-form → bước kiểm trùng, gọi `check_duplicate_restaurant` debounce 350 ms có hủy request cũ, nút "Đây là quán khác, vẫn thêm"); `RestaurantReport` (3 lý do, trạng thái đã báo, lỗi riêng cho tự báo/không được phép); nút "+ Thêm quán" trên bản đồ; báo cáo hiện cả khi quán không còn hiển thị. Chuỗi i18n đầy đủ `vi`/`en` (đã kiểm tra hai tệp khớp khoá).
+- **Client repository:** `checkDuplicateRestaurant`, `createRestaurant`, `reportRestaurant` gọi đúng tên + kiểu tham số của RPC; `RestaurantWriteError` mang `code`/`hint` để UI phân biệt trùng quán, vượt giới hạn, tự báo quán mình.
+- **Test client:** `src/features/restaurants/types.test.ts` — 5 test (schema tước khoá lạ như `created_by`/`status`, từ chối toạ độ sai, giá âm, lý do báo cáo ngoài danh sách).
+
+### 5.3. Checklist kiểm tra tay M6 (sau `db push`)
+
+1. Bấm **"+ Thêm quán"**, kéo bản đồ; xác nhận ghim nằm cố định giữa màn hình và **không** có hộp thoại xin quyền vị trí.
+2. Là Khách: điền form rồi bấm gửi → popup đăng nhập hiện ra, **form không mất dữ liệu**; đăng nhập xong gửi lại được (AUTH-02).
+3. Đặt ghim gần một quán đã có và nhập tên gần giống → bước kiểm trùng hiện danh sách (tên, địa chỉ, khoảng cách); bấm "Xem quán này" phải mở đúng quán đó.
+4. Quay lại bước kiểm trùng, bấm "Đây là quán khác, vẫn thêm" → quán được tạo.
+5. DevTools → gọi RPC trực tiếp `create_restaurant` **6 lần trong ngày** cùng tài khoản; lần vượt phải trả lỗi giới hạn (P0001) và UI hiện thông báo giới hạn ngày.
+6. Gọi RPC với `p_lat = 91` hoặc `p_lng = 200` → bị từ chối; UI hiện lỗi "toạ độ không hợp lệ" (không tạo quán).
+7. DevTools gọi thẳng `create_restaurant` với tên trùng trong 50 m và **không** gọi `check_duplicate_restaurant` trước → vẫn bị chặn (server tự kiểm), và `hint` trả về là `duplicate_restaurant`.
+8. Gọi `create_restaurant` kèm `p_dishes` chứa `{"created_by": "...", "status": "removed", "source": "seed"}` → quán tạo ra phải có `created_by` = chính bạn, `status='active'`, `source='user'` (khoá lạ bị bỏ qua).
+9. Mở DevTools Network và **kiểm mọi phản hồi** (`restaurants_in_bounds`, `search_restaurants`, `restaurant_detail`, `check_duplicate_restaurant`, và thử `select=created_by` trên bảng `restaurants`) → không phản hồi nào chứa `created_by`; truy vấn cột đó phải trả lỗi quyền 42501.
+10. Báo cáo quán bằng tài khoản của người khác với đủ số tài khoản khác nhau để đạt ngưỡng 3 → quán chuyển `hidden_pending_review`, biến khỏi bản đồ và khỏi kết quả tìm kiếm; mở lại trang chi tiết thấy thông báo thân thiện và vẫn báo cáo được.
+11. Thử tự báo quán do chính mình tạo → bị từ chối; thử báo lại lần hai cùng tài khoản → UI hiện "đã ghi nhận" (không tạo báo cáo thứ hai).
+
 ## 7. Quyết định đã chốt (không đổi khi chưa hỏi người dùng)
 
 - Nền tảng: web PWA, mobile-first (không làm app native ở giai đoạn này)
@@ -163,8 +197,10 @@ E2E:             npx playwright test     # chưa cài; M9
 - Không nạp seed.sql lên cloud (nó chứa người dùng giả trong auth.users)
 - `profiles` chỉ cho `authenticated` cập nhật `display_name` và `avatar_url`; các cột `role` và `is_banned` bị giới hạn bằng column privileges.
 - Review insert phải kiểm tra trạng thái `profiles.is_banned`; photo path không được chứa UUID chủ review khi review ẩn danh.
-- **M5 (mới):** từ M5 trở đi `authenticated` **không** ghi trực tiếp bảng `reviews`/`review_photos`/`review_helpful`; mọi thay đổi đi qua RPC có kiểm tra chủ sở hữu. T6/T11 dùng `lim=50` (đã có bằng chứng CI về top-N).
-- **M5 (mới):** ảnh review là write-once — không cấp policy UPDATE trên Storage; xóa ảnh đi kèm xóa review hoặc xóa tài khoản.
+- **M5:** từ M5 trở đi `authenticated` **không** ghi trực tiếp bảng `reviews`/`review_photos`/`review_helpful`; mọi thay đổi đi qua RPC có kiểm tra chủ sở hữu. T6/T11 dùng `lim=50` (đã có bằng chứng CI về top-N).
+- **M5:** ảnh review là write-once — không cấp policy UPDATE trên Storage; xóa ảnh đi kèm xóa review hoặc xóa tài khoản.
+- **M6:** `authenticated`/`anon` **không** ghi trực tiếp `restaurants`/`restaurant_dishes`; mọi thay đổi qua `create_restaurant`. Quyền **đọc cột `created_by` bị thu hồi** (lộ danh tính người ghim quán); `check_duplicate_restaurant` giữ chữ ký §7.3 nhưng bỏ cột `similarity`.
+- **M6:** ngưỡng ẩn quán do báo cáo = **3 người báo khác nhau**, đếm gộp mọi lý do, chỉ tính tài khoản đã xác minh email + không ban + ≥ 24h (chi tiết và rủi ro ở `docs/ASSUMPTIONS.md` M6-4/M6-5).
 
 ## 8. Vấn đề / bug đã biết
 
@@ -203,7 +239,8 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-09 | DeepSeek Harness | Tiếp quản M5 (vòng 1): khôi phục `PROGRESS.md` bị ghi đè; hoàn nguyên 2 chỗ sai trong `01_rls_test.sql` (T6/T11 `lim=10`, mất `role postgres` + clear JWT trước fixture); cập nhật 01/05 cho mô hình RPC M5; thêm `09_m5_review_rules_test.sql`; nối trigger `trg_enforce_review_system_fields`, thêm ràng buộc độ dài path, bỏ policy UPDATE Storage; `delete-account` dọn ảnh Storage. Bốn lệnh local pass. | `076b3d2` |
 | 2026-10-09 | DeepSeek Harness | Vòng 2 sau log CI đỏ: chuyển mọi ghi trực tiếp trong `01` sang `throws_ok(42501)` + đọc lại bằng vai đặc quyền (`plan(43)`); sửa lỗi chữ ký 42883 bằng cách đổi `p_rating`/`p_position` sang `integer` trong migration (lỗi ảnh hưởng cả PostgREST ở app), thêm `diag()` chữ ký hàm; thiết kế lại `delete_review` trả `storage_paths` thay vì xóa `storage.objects` bằng SQL, cập nhật `repository.ts` và test 08; ghi rủi ro `owner_id` vào `docs/PRIVACY-DESIGN.md`. Bốn lệnh local pass; chờ CI. | `4f69873` |
 | 2026-10-09 | DeepSeek Harness | Vòng 3 sau log CI thứ hai (Files=9, Tests=118, còn 3 lỗi): thêm `diag()` mốc giá trị cho T24 của `01` (không đổi hằng số kỳ vọng); `plan(13)`→`plan(14)` cho `08` kèm giải thích test thứ 14 là assertion cascade hợp lệ; tách M5-15 của `09` thành `lives_ok` + M5-16 đọc `helpful_count` bằng `postgres` (NULL do RLS chỉ cho thấy hàng của chính mình). Bốn lệnh local pass; chờ CI. | `59af17c` |
-| 2026-10-09 | DeepSeek Harness | Vòng 4: sửa T24/T25 của `01` sang so sánh trước/sau bằng temp table (bằng chứng CI cho thấy quán 444 đúng là 4.50/2 do trigger M5 tính từ 2 review fixture, không phải 0/0); `09` plan khai dư từ lúc tạo file (14 assertion nhưng `plan(16)`, nhãn bắt đầu ở M5-02) → đánh số lại tuần tự M5-01…M5-15 và `plan(15)`. Xác nhận 0 hàng `reviews` dưới `authenticated` là chủ đích theo SPEC §7.1. Bốn lệnh local pass; chờ CI. | (commit vòng 4) |
+| 2026-10-09 | DeepSeek Harness | Vòng 4: sửa T24/T25 của `01` sang so sánh trước/sau bằng temp table (bằng chứng CI cho thấy quán 444 đúng là 4.50/2 do trigger M5 tính từ 2 review fixture, không phải 0/0); `09` plan khai dư từ lúc tạo file (14 assertion nhưng `plan(16)`, nhãn bắt đầu ở M5-02) → đánh số lại tuần tự M5-01…M5-15 và `plan(15)`. Xác nhận 0 hàng `reviews` dưới `authenticated` là chủ đích theo SPEC §7.1. Bốn lệnh local pass; chờ CI. | `765361e` |
+| 2026-10-10 | DeepSeek Harness | M5 CI xanh + đã `db push` (người dùng xác nhận); DoD M5 vẫn chờ checklist tay 11 bước. Bắt đầu M6: rà quyền cột `restaurants` (thu hồi SELECT `created_by`), migration `20261010090000` (create_restaurant, find/check_duplicate_restaurant, report_restaurant + trigger ngưỡng, ràng buộc toạ độ), pgTAP `10` (`plan(43)`, nhãn M6-01…M6-43), giao diện ghim/thêm quán/báo cáo + i18n vi/en + 5 unit test schema. Bốn lệnh local pass; chờ CI. Không `db push`, không mở PR mutation, chưa sang M7. | (commit M6) |
 
 ## 10. Những gì đã đổi về quyền hệ thống ở lượt trước (để đối chiếu, KHÔNG lặp lại)
 
