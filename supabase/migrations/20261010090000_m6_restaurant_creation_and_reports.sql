@@ -79,7 +79,9 @@ as $$
   order by similarity desc, distance_meters asc;
 $$;
 
-revoke all on function public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric) from public, anon;
+-- CREATE FUNCTION grants EXECUTE to PUBLIC, so revoking from anon alone is not enough: the role
+-- inherits PUBLIC's grant. Revoke from PUBLIC and granter roles, then grant to authenticated only.
+revoke all on function public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric) from public, anon, authenticated;
 grant execute on function public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric) to authenticated;
 
 -- RES-03 / §7.3: keep the SPEC signature and return shape, drop the extra similarity column.
@@ -103,7 +105,7 @@ as $$
   from public.find_duplicate_restaurants(name, lat::double precision, lng::double precision) d;
 $$;
 
-revoke all on function public.check_duplicate_restaurant(text, float, float) from public, anon;
+revoke all on function public.check_duplicate_restaurant(text, float, float) from public, anon, authenticated;
 grant execute on function public.check_duplicate_restaurant(text, float, float) to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -129,6 +131,11 @@ declare
   duplicate record;
   new_id uuid;
   dish_count integer;
+  daily_count integer;
+  daily_limit integer := coalesce(
+    nullif(current_setting('app.restaurant_daily_limit', true), '')::integer,
+    5
+  );
 begin
   if actor is null then
     raise exception 'Authentication required' using errcode = '42501';
@@ -173,6 +180,18 @@ begin
     raise exception 'Dish does not exist';
   end if;
 
+  -- Quota before the duplicate guard, so a call that is both over quota and a duplicate reports the
+  -- quota. The limit is configurable like app.review_daily_limit; the M3 trigger remains the
+  -- backstop for the absolute five-per-day window.
+  select count(*) into daily_count
+  from public.restaurants r
+  where r.created_by = actor
+    and r.created_at >= now() - interval '1 day';
+  if daily_count >= daily_limit then
+    raise exception 'Đã vượt quá giới hạn tạo % địa điểm mỗi ngày.', daily_limit
+      using errcode = 'P0001', hint = 'restaurant_daily_limit';
+  end if;
+
   -- Server-side duplicate guard: never trust that the client ran the check step.
   if not p_confirm_new then
     select * into duplicate
@@ -180,12 +199,12 @@ begin
     limit 1;
     if found then
       raise exception 'A similar restaurant is already within 50m: %', duplicate.name
-        using errcode = 'P0001', hint = 'duplicate_restaurant';
+        using errcode = 'P0001', hint = 'duplicate_restaurant',
+                    detail = duplicate.id::text;
     end if;
   end if;
 
-  -- Serialize this account's quota check; the limit itself lives in the existing
-  -- public.check_restaurant_limits() trigger, which raises P0001 when the window is full.
+  -- Serialize this account's quota check so two concurrent calls cannot both pass the count.
   perform pg_advisory_xact_lock(hashtextextended('create_restaurant:' || actor::text, 0));
 
   insert into public.restaurants (name, address, province, location)
@@ -206,7 +225,7 @@ begin
 end;
 $$;
 
-revoke all on function public.create_restaurant(text, text, double precision, double precision, text, jsonb, boolean) from public, anon;
+revoke all on function public.create_restaurant(text, text, double precision, double precision, text, jsonb, boolean) from public, anon, authenticated;
 grant execute on function public.create_restaurant(text, text, double precision, double precision, text, jsonb, boolean) to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -253,7 +272,7 @@ begin
 end;
 $$;
 
-revoke all on function public.report_restaurant(uuid, text) from public, anon;
+revoke all on function public.report_restaurant(uuid, text) from public, anon, authenticated;
 grant execute on function public.report_restaurant(uuid, text) to authenticated;
 
 -- Distinct verified reporters, not raw rows: three reports from one account must not hide a venue.

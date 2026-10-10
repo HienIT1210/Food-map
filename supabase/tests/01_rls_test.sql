@@ -8,7 +8,7 @@ set search_path = public, extensions;
 -- RLS silently matching zero rows, which removed the bare UPDATE/DELETE statements that used to run
 -- unasserted. Each denial therefore needs its own throws_ok slot, so the plan grew from 38 to 43
 -- while covering the same security rules. Nothing was deleted or commented out.
-select extensions.plan(43);
+select extensions.plan(50);
 
 -- CI diagnostics: print the live signatures so a test/function mismatch shows its own evidence
 -- instead of a bare 42883. These diag() calls do not consume a plan slot.
@@ -188,12 +188,62 @@ select extensions.diag('>>> BEFORE T8/T20/T22: restaurant dddd4444-...444 avg_ra
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
--- M5 routes every review write through save_review, so the daily cap is asserted on the RPC the
--- app actually calls. The 10 fixture rows above leave User D exactly at the limit.
+-- T8 keeps its slot: the daily cap is asserted on the RPC the app actually calls. The 10 fixture
+-- rows above leave User D exactly at the limit, so the eleventh review must be refused there.
 select extensions.throws_ok(
   $$select public.save_review('dddd4444-4444-4444-4444-444444444445', null, 5, 'Over limit', false)$$,
   'P0001', null,
   'T8 (d): save_review chặn review thứ 11 trong ngày (giới hạn ép ở database)'
+);
+
+-- T9: the restaurant quota. M6 revoked direct inserts, so the five places are created through
+-- create_restaurant. The names differ and the coordinates are hundreds of metres apart, so a
+-- refusal can only come from the quota and never from the duplicate guard; p_confirm_new stays false.
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
+select extensions.lives_ok(
+  $$select public.create_restaurant('Quán D quota 1', null, 21.0100, 105.8100)$$,
+  'T9 (d): quán D thứ 1 trong ngày được tạo qua create_restaurant'
+);
+select extensions.lives_ok(
+  $$select public.create_restaurant('Quán D quota 2', null, 21.0200, 105.8200)$$,
+  'T9b (d): quán D thứ 2 trong ngày được tạo qua create_restaurant'
+);
+select extensions.lives_ok(
+  $$select public.create_restaurant('Quán D quota 3', null, 21.0300, 105.8300)$$,
+  'T9c (d): quán D thứ 3 trong ngày được tạo qua create_restaurant'
+);
+select extensions.lives_ok(
+  $$select public.create_restaurant('Quán D quota 4', null, 21.0400, 105.8400)$$,
+  'T9d (d): quán D thứ 4 trong ngày được tạo qua create_restaurant'
+);
+select extensions.lives_ok(
+  $$select public.create_restaurant('Quán D quota 5', null, 21.0500, 105.8500)$$,
+  'T9e (d): quán D thứ 5 trong ngày được tạo qua create_restaurant'
+);
+select extensions.throws_ok(
+  $$select public.create_restaurant('Quán D quota 6', null, 21.0600, 105.8600)$$,
+  'P0001', 'restaurant_daily_limit',
+  'T9f (d): create_restaurant chặn quán thứ 6 trong ngày (hint restaurant_daily_limit)'
+);
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+select extensions.diag('>>> restaurant quota: app.restaurant_daily_limit='
+  || coalesce(current_setting('app.restaurant_daily_limit', true), '(unset -> default 5)')
+  || ' rows for user D in the last day='
+  || (select count(*)::text from public.restaurants
+      where created_by = 'dddd7777-7777-7777-7777-777777777777'
+        and created_at >= now() - interval '1 day')
+  || ' (expected: 5 rows, so the sixth RPC call is refused)');
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
+
+-- The M3 trigger stays the backstop for any path that bypasses the RPC: a direct insert is denied
+-- by privileges, and a different account still hits the five-per-day trigger message.
+select extensions.throws_ok(
+  'insert into public.restaurants (name, location, created_by) values (''Quán D 6'', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), ''dddd7777-7777-7777-7777-777777777777'')',
+  '42501', null,
+  'T9g (d): insert trực tiếp restaurants bị từ chối (42501), không cấp lại quyền để test qua'
 );
 
 -- Evidence for T24: does the denied RPC leave restaurant 444 alone?
@@ -206,24 +256,7 @@ select extensions.diag('>>> AFTER T8 RPC: restaurant dddd4444-...444 avg_rating=
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
--- Test limit nhà hàng: 5 nhà hàng mỗi ngày
-set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
-do $$
-begin
-  for i in 1..5 loop
-    insert into public.restaurants (name, location, created_by) values ('Quán D ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), 'dddd7777-7777-7777-7777-777777777777');
-  end loop;
-end;
-$$;
-
-select extensions.throws_ok(
-  'insert into public.restaurants (name, location, created_by) values (''Quán D 6'', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), ''dddd7777-7777-7777-7777-777777777777'')',
-  'Đã vượt quá giới hạn tạo 5 địa điểm mỗi ngày.',
-  'T9 (d): Chặn insert nhà hàng thứ 6 trong ngày'
-);
-
--- Evidence for T24: has anything touched restaurant 444 by the end of T9?
+-- Evidence for T24: has anything touched restaurant 444 by the end of the quota block?
 set local role postgres;
 select extensions.diag('>>> AFTER T9: restaurant dddd4444-...444 avg_rating='
   || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')

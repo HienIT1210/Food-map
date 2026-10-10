@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select extensions.plan(49);
+select extensions.plan(52);
 
 -- First CI run evidence: print every new signature so a mismatch is never a bare 42883.
 select extensions.diag('>>> create_restaurant args: '
@@ -209,25 +209,77 @@ select extensions.throws_ok(
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000004","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$,
-  'P0001', null, 'M6-20: an unconfirmed duplicate is refused'
+  'P0001', 'duplicate_restaurant', 'M6-20: an unconfirmed duplicate is refused with the duplicate hint'
 );
-select extensions.throws_ok(
-  $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$,
-  'duplicate_restaurant', null, 'M6-21: the duplicate refusal carries the duplicate_restaurant hint'
+-- Evidence for M6-20: capture the stacked diagnostics the client must rely on instead of the
+-- message text, then assert on the stable identifier (the hint). The capture happens before the
+-- assertion so no role switch is needed and no step is combined with a read.
+create temp table _m6_dup_error (sqlstate text, hint text, detail text, message text) on commit drop;
+do $$
+declare
+  caught_state text;
+  caught_message text;
+  caught_hint text;
+  caught_detail text;
+begin
+  begin
+    perform public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101);
+  exception when others then
+    get stacked diagnostics
+      caught_state = returned_sqlstate,
+      caught_message = message_text,
+      caught_hint = pg_exception_hint,
+      caught_detail = pg_exception_detail;
+    insert into _m6_dup_error values (caught_state, caught_hint, caught_detail, caught_message);
+    perform extensions.diag('>>> duplicate refusal: sqlstate=' || caught_state
+      || ' hint=' || coalesce(caught_hint, 'NULL')
+      || ' detail=' || coalesce(caught_detail, 'NULL')
+      || ' message=' || caught_message);
+  end;
+end;
+$$;
+select extensions.is(
+  (select hint from _m6_dup_error),
+  'duplicate_restaurant',
+  'M6-21: the duplicate refusal is identified by the duplicate_restaurant hint'
 );
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Bún', 'confirmed as a different place', 21.0101, 105.8101, null, '[]'::jsonb, true)$$,
   'M6-22: confirming "this is a different place" creates the restaurant next to a similar name'
 );
-select extensions.throws_ok(
-  $$select public.create_restaurant('M6 Quota Ba', '14 M6 Street', 21.08, 105.88)$$,
-  'P0001', null, 'M6-23: the daily quota refuses the next restaurant'
+-- The quota user already created three places through the RPC above, so the limit (default 5) is
+-- reached after two more. Every name differs and the coordinates are far apart, so a refusal can
+-- only be the quota and never the duplicate guard.
+select extensions.lives_ok(
+  $$select public.create_restaurant('M6 Quota Bốn', '15 M6 Street', 21.09, 105.89)$$,
+  'M6-23: the fourth place of the day is still allowed'
+);
+select extensions.lives_ok(
+  $$select public.create_restaurant('M6 Quota Năm', '16 M6 Street', 21.10, 105.90)$$,
+  'M6-24: the fifth place of the day is still allowed'
 );
 select extensions.throws_ok(
-  $$select public.create_restaurant('M6 Quota Ba', '14 M6 Street', 21.08, 105.88)$$,
-  'Đã vượt quá giới hạn tạo 5 địa điểm mỗi ngày.', null,
-  'M6-24: the quota refusal is the documented daily-limit error'
+  $$select public.create_restaurant('M6 Quota Sáu', '17 M6 Street', 21.11, 105.91)$$,
+  'P0001', 'restaurant_daily_limit',
+  'M6-25: the sixth place of the day is refused with the quota hint'
 );
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+select extensions.diag('>>> before the quota refusal: app.restaurant_daily_limit='
+  || coalesce(current_setting('app.restaurant_daily_limit', true), '(unset -> default 5)')
+  || ' count used by the RPC (created_by + last 24h)='
+  || (select count(*)::text from public.restaurants
+      where created_by = 'a6060000-0000-4000-8000-000000000004'
+        and created_at >= now() - interval '1 day')
+  || ' trigger limit is hard-coded at 5');
+select extensions.diag('>>> quota user rows: '
+  || coalesce((
+       select string_agg(r.name || ' | created_by=' || coalesce(r.created_by::text, 'NULL')
+              || ' | created_at=' || r.created_at::text || ' | status=' || r.status
+              || ' | source=' || r.source, ' ;; ' order by r.created_at)
+       from public.restaurants r
+       where r.created_by = 'a6060000-0000-4000-8000-000000000004'
+     ), '(none)'));
 
 -- ---------------------------------------------------------------------------
 -- M6-25..M6-28: report_restaurant guards.
@@ -235,20 +287,20 @@ select extensions.throws_ok(
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000012', 'closed')$$,
-  '42501', null, 'M6-25: a user cannot report a restaurant they created'
+  '42501', null, 'M6-26: a user cannot report a restaurant they created'
 );
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000012', 'not a reason')$$,
-  'P0001', null, 'M6-26: an unsupported report reason is refused'
+  'P0001', null, 'M6-27: an unsupported report reason is refused'
 );
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000003","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.create_restaurant('M6 Banned Quán', 'banned', 21.3, 105.3)$$,
-  '42501', null, 'M6-27: a banned account cannot create a restaurant'
+  '42501', null, 'M6-28: a banned account cannot create a restaurant'
 );
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000012', 'closed')$$,
-  '42501', null, 'M6-28: a banned account cannot report a restaurant'
+  '42501', null, 'M6-29: a banned account cannot report a restaurant'
 );
 
 -- ---------------------------------------------------------------------------
@@ -267,7 +319,7 @@ set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000013', 'closed')$$,
-  'M6-29: one account can report a restaurant it did not create'
+  'M6-30: one account can report a restaurant it did not create'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -275,13 +327,13 @@ select extensions.is(
   (select count(distinct reporter_id)::integer from public.reports
    where target_type = 'restaurant' and target_id = 'a6060000-0000-4000-8000-000000000013'),
   1,
-  'M6-30: the report is stored as one distinct reporter'
+  'M6-31: the report is stored as one distinct reporter'
 );
 select set_config('app.restaurant_report_threshold', '3', true);
 select extensions.is(
   (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000013'),
   (select status from _m6_status_before),
-  'M6-31: below the threshold the status is unchanged from the snapshot'
+  'M6-32: below the threshold the status is unchanged from the snapshot'
 );
 
 -- The same person reporting the same restaurant again must not count twice.
@@ -289,14 +341,14 @@ set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000013', 'wrong_location')$$,
-  '23505', null, 'M6-32: one account cannot report the same restaurant twice'
+  '23505', null, 'M6-33: one account cannot report the same restaurant twice'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
 select extensions.is(
   (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000013'),
   'active',
-  'M6-33: a repeated report from the same account leaves the restaurant active'
+  'M6-34: a repeated report from the same account leaves the restaurant active'
 );
 
 -- ---------------------------------------------------------------------------
@@ -307,17 +359,17 @@ create temp table _m6_status_before_hide on commit drop as
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000014', 'closed')$$,
-  'M6-34: the first report on the three-reporter target is accepted'
+  'M6-35: the first report on the three-reporter target is accepted'
 );
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000006","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000014', 'wrong_info')$$,
-  'M6-35: the second distinct report is accepted'
+  'M6-36: the second distinct report is accepted'
 );
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000007","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000014', 'wrong_location')$$,
-  'M6-36: the third distinct report is accepted and reaches the threshold'
+  'M6-37: the third distinct report is accepted and reaches the threshold'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -327,30 +379,30 @@ select extensions.diag('>>> AFTER threshold reports: restaurant ...014 status = 
 select extensions.is(
   (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000014'),
   'hidden_pending_review',
-  'M6-37: reaching three distinct reporters hides the restaurant'
+  'M6-38: reaching three distinct reporters hides the restaurant'
 );
 select extensions.ok(
   (select status from _m6_status_before_hide) = 'active'
   and (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000014') = 'hidden_pending_review',
-  'M6-38: the status changed from the pre-report snapshot, not by assumption'
+  'M6-39: the status changed from the pre-report snapshot, not by assumption'
 );
 select extensions.is(
   (select count(*)::int from public.restaurants_in_bounds(20.9, 105.7, 21.1, 105.9)
    where id = 'a6060000-0000-4000-8000-000000000013'),
   1,
-  'M6-39: an active restaurant in the same box is still visible, so the next assertion can fail'
+  'M6-40: an active restaurant in the same box is still visible, so the next assertion can fail'
 );
 select extensions.is(
   (select count(*)::int from public.restaurants_in_bounds(20.9, 105.7, 21.1, 105.9)
    where id = 'a6060000-0000-4000-8000-000000000014'),
   0,
-  'M6-40: a hidden restaurant disappears from restaurants_in_bounds'
+  'M6-41: a hidden restaurant disappears from restaurants_in_bounds'
 );
 select extensions.is(
   (select count(*)::int from public.search_restaurants('M6 Bị Báo Ba Người', 50)
    where id = 'a6060000-0000-4000-8000-000000000014'),
   0,
-  'M6-41: a hidden restaurant disappears from search'
+  'M6-42: a hidden restaurant disappears from search'
 );
 
 -- ---------------------------------------------------------------------------
@@ -361,87 +413,112 @@ set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000005"
 select extensions.is(
   (select count(*)::int from public.reports),
   0,
-  'M6-42: a user with no reports cannot read anyone else reports'
+  'M6-43: a user with no reports cannot read anyone else reports'
 );
 set local role anon;
 set local "request.jwt.claims" to '{"role":"anon"}';
 select extensions.ok(
   not has_column_privilege('anon', 'public.restaurants', 'created_by', 'SELECT')
   and has_column_privilege('anon', 'public.restaurants', 'name', 'SELECT'),
-  'M6-43: anon keeps the safe restaurant columns but not created_by'
+  'M6-44: anon keeps the safe restaurant columns but not created_by'
 );
 
 -- ---------------------------------------------------------------------------
--- M6-44..M6-49: the column-level SELECT contract. The list is compared against the catalog so a
--- column added later without an explicit grant cannot slip through unnoticed.
+-- M6-45..M6-50: the column-level SELECT contract. Everything here runs as postgres:
+-- information_schema.column_privileges only shows rows the CURRENT role can see, which is why an
+-- earlier diagnostic printed "(none)" while the grant was in fact missing. The sweep uses
+-- pg_attribute plus has_column_privilege(), which answer for any requested role.
 -- ---------------------------------------------------------------------------
-select extensions.diag('>>> restaurants columns without SELECT for anon: '
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+select extensions.diag('>>> created_by visible to postgres itself? '
+  || has_column_privilege('postgres', 'public.restaurants', 'created_by', 'SELECT')::text
+  || ' | table-level SELECT for anon='
+  || has_table_privilege('anon', 'public.restaurants', 'SELECT')::text
+  || ' authenticated='
+  || has_table_privilege('authenticated', 'public.restaurants', 'SELECT')::text);
+select extensions.diag('>>> SELECT privilege per column (postgres-verified): '
   || coalesce((
-       select string_agg(c.column_name, ', ' order by c.column_name)
-       from information_schema.columns c
-       where c.table_schema = 'public' and c.table_name = 'restaurants'
-         and not has_column_privilege('anon', 'public.restaurants', c.column_name, 'SELECT')
-     ), '(none)'));
-select extensions.diag('>>> restaurants columns without SELECT for authenticated: '
-  || coalesce((
-       select string_agg(c.column_name, ', ' order by c.column_name)
-       from information_schema.columns c
-       where c.table_schema = 'public' and c.table_name = 'restaurants'
-         and not has_column_privilege('authenticated', 'public.restaurants', c.column_name, 'SELECT')
-     ), '(none)'));
-select extensions.diag('>>> column privileges actually granted on public.restaurants: '
-  || coalesce((
-       select string_agg(grantee || ' on ' || column_name, ', ' order by grantee, column_name)
-       from information_schema.column_privileges
-       where table_schema = 'public' and table_name = 'restaurants'
-         and grantee in ('anon', 'authenticated')
-         and privilege_type = 'SELECT'
+       select string_agg(
+         a.attname || ': anon=' || has_column_privilege('anon', 'public.restaurants', a.attname, 'SELECT')::text
+         || ' authenticated=' || has_column_privilege('authenticated', 'public.restaurants', a.attname, 'SELECT')::text,
+         ' ;; ' order by a.attnum)
+       from pg_attribute a
+       where a.attrelid = 'public.restaurants'::regclass
+         and a.attnum > 0
+         and not a.attisdropped
      ), '(none)'));
 
 select extensions.ok(
   not has_table_privilege('anon', 'public.restaurants', 'SELECT')
   and not has_table_privilege('authenticated', 'public.restaurants', 'SELECT'),
-  'M6-44: neither API role holds table-level SELECT on restaurants'
+  'M6-45: neither API role holds table-level SELECT on restaurants'
 );
 select extensions.ok(
   has_column_privilege('anon', 'public.restaurants', 'id', 'SELECT')
   and has_column_privilege('anon', 'public.restaurants', 'status', 'SELECT')
   and has_column_privilege('authenticated', 'public.restaurants', 'review_count', 'SELECT')
   and has_column_privilege('authenticated', 'public.restaurants', 'created_at', 'SELECT'),
-  'M6-45: the public columns stay readable for both roles'
+  'M6-46: the public columns stay readable for both roles'
 );
 select extensions.ok(
   (
     select count(*)::integer
-    from information_schema.columns c
-    where c.table_schema = 'public' and c.table_name = 'restaurants'
-      and c.column_name <> 'created_by'
-      and not has_column_privilege('anon', 'public.restaurants', c.column_name, 'SELECT')
+    from pg_attribute a
+    where a.attrelid = 'public.restaurants'::regclass
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attname <> 'created_by'
+      and not has_column_privilege('anon', 'public.restaurants', a.attname, 'SELECT')
   ) = 0,
-  'M6-46: every non-created_by column is granted to anon'
+  'M6-47: every non-created_by column is granted to anon'
 );
 select extensions.ok(
   (
     select count(*)::integer
-    from information_schema.columns c
-    where c.table_schema = 'public' and c.table_name = 'restaurants'
-      and c.column_name <> 'created_by'
-      and not has_column_privilege('authenticated', 'public.restaurants', c.column_name, 'SELECT')
+    from pg_attribute a
+    where a.attrelid = 'public.restaurants'::regclass
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attname <> 'created_by'
+      and not has_column_privilege('authenticated', 'public.restaurants', a.attname, 'SELECT')
   ) = 0,
-  'M6-47: every non-created_by column is granted to authenticated'
+  'M6-48: every non-created_by column is granted to authenticated'
 );
 
 set local role anon;
 set local "request.jwt.claims" to '{"role":"anon"}';
 select extensions.throws_ok(
   'select created_by from public.restaurants',
-  '42501', null, 'M6-48: anon reading created_by gets a privilege error, not rows'
+  '42501', null, 'M6-49: anon reading created_by gets a privilege error, not rows'
 );
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.throws_ok(
   'select created_by from public.restaurants',
-  '42501', null, 'M6-49: authenticated reading created_by gets a privilege error, not rows'
+  '42501', null, 'M6-50: authenticated reading created_by gets a privilege error, not rows'
+);
+
+-- M6-51/M6-52: the shared duplicate helper must not be callable by anon. CREATE FUNCTION grants
+-- EXECUTE to PUBLIC, so the revoke has to name PUBLIC as well.
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+select extensions.diag('>>> find_duplicate_restaurants execute: anon='
+  || has_function_privilege('anon', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE')::text
+  || ' authenticated='
+  || has_function_privilege('authenticated', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE')::text
+  || ' public='
+  || has_function_privilege('public', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE')::text);
+select extensions.ok(
+  not has_function_privilege('anon', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE'),
+  'M6-51: the duplicate helper is callable by authenticated but not by anon'
+);
+set local role anon;
+set local "request.jwt.claims" to '{"role":"anon"}';
+select extensions.throws_ok(
+  $$select public.find_duplicate_restaurants('M6 Bún', 21.01, 105.81)$$,
+  '42501', null, 'M6-52: anon calling the duplicate helper directly is refused'
 );
 
 select * from extensions.finish(true);

@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select extensions.plan(24);
+select extensions.plan(25);
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
 select '00000000-0000-0000-0000-000000000000', user_id, 'authenticated', 'authenticated', user_id::text || '@security.test', '', now(), now(), now()
@@ -79,40 +79,52 @@ select extensions.throws_ok(
   $$insert into public.restaurants (name, location, created_by, source) values ('Forged source', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), auth.uid(), 'user')$$,
   '42501', null, 'R6: authenticated cannot set restaurant source'
 );
+-- R7/R8/R9 keep their slots but now describe the M6 contract: no table or column write on
+-- restaurants, and creation only through create_restaurant, which the trigger then canonicalizes.
 select extensions.ok(
-  has_column_privilege('authenticated', 'public.restaurants', 'name', 'INSERT')
-  and has_column_privilege('authenticated', 'public.restaurants', 'created_by', 'INSERT')
+  not has_column_privilege('authenticated', 'public.restaurants', 'name', 'INSERT')
+  and not has_column_privilege('authenticated', 'public.restaurants', 'created_by', 'INSERT')
   and not has_table_privilege('authenticated', 'public.restaurants', 'INSERT'),
-  'R7: restaurant insert is restricted to granted columns'
+  'R7: authenticated holds no insert privilege on restaurants at table or column level'
 );
-
--- A normal user insert must get canonical system values from the trigger.
+select extensions.throws_ok(
+  $$insert into public.restaurants (name, location, created_by) values ('Direct write', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), auth.uid())$$,
+  '42501', null, 'R7b: a direct restaurant insert is denied'
+);
+set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"50555555-5555-5555-5555-555555555555","role":"authenticated"}';
 select extensions.lives_ok(
-  $$insert into public.restaurants (name, location, created_by) values ('Canonical restaurant', extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326), auth.uid())$$,
-  'R8: authenticated can create a restaurant using only user-editable fields'
+  $$select public.create_restaurant('f05e0000-canonical', 'fixture address', 21.05, 105.85)$$,
+  'R8: authenticated can create a restaurant through the RPC with user-editable fields only'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
 select extensions.ok(
-  (select source = 'user' and status = 'active' and avg_rating = 0 and review_count = 0 and created_at > now() - interval '1 minute'
-   from public.restaurants where name = 'Canonical restaurant'),
-  'R9: restaurant trigger sets source, status, counters and created_at'
+  (select source = 'user' and status = 'active' and avg_rating = 0 and review_count = 0
+     and created_at > now() - interval '1 minute'
+   from public.restaurants where name = 'f05e0000-canonical'),
+  'R9: the create path sets source, status, counters and created_at'
 );
 
 -- Ten user-backdated reviews expose the old created_at-based limit bypass.
+-- M6 revoked every write privilege on restaurants, so the fixtures are created as postgres and get
+-- fixed ids: the review assertions below must not read public.restaurants as an API role, otherwise
+-- they would fail on a privilege error from the subquery instead of from the insert they test.
 set local "request.jwt.claims" to '{}';
+create temp table _r_review_fixtures on commit drop as
+  select ('d05e0000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid as id, n
+  from generate_series(1, 13) as series(n);
 do $$
 declare
-  restaurant_id uuid;
+  fixture record;
 begin
-  for i in 1..13 loop
-    insert into public.restaurants (name, location)
-    values ('Review limit fixture ' || i, extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326))
-    returning id into restaurant_id;
-    if i <= 10 then
+  for fixture in select id, n from _r_review_fixtures order by n loop
+    insert into public.restaurants (id, name, location)
+    values (fixture.id, 'Review limit fixture ' || fixture.n,
+      extensions.st_setsrid(extensions.st_makepoint(105.8, 21.0), 4326));
+    if fixture.n <= 10 then
       insert into public.reviews (user_id, restaurant_id, rating, created_at)
-      values ('40444444-4444-4444-4444-444444444444', restaurant_id, 5, now() - interval '30 days');
+      values ('40444444-4444-4444-4444-444444444444', fixture.id, 5, now() - interval '30 days');
     end if;
   end loop;
 end;
@@ -120,15 +132,15 @@ $$;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"40444444-4444-4444-4444-444444444444","role":"authenticated"}';
 select extensions.throws_ok(
-  $$insert into public.reviews (user_id, restaurant_id, rating, created_at) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 11'), 5, now() - interval '30 days')$$,
+  $$insert into public.reviews (user_id, restaurant_id, rating, created_at) values (auth.uid(), 'd05e0000-0000-4000-8000-000000000011', 5, now() - interval '30 days')$$,
   '42501', null, 'R10: authenticated cannot backdate a review to evade the daily limit'
 );
 select extensions.throws_ok(
-  $$insert into public.reviews (user_id, restaurant_id, rating, helpful_count) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 12'), 5, 100)$$,
+  $$insert into public.reviews (user_id, restaurant_id, rating, helpful_count) values (auth.uid(), 'd05e0000-0000-4000-8000-000000000012', 5, 100)$$,
   '42501', null, 'R11: authenticated cannot set review helpful_count'
 );
 select extensions.throws_ok(
-  $$insert into public.reviews (user_id, restaurant_id, rating, status) values (auth.uid(), (select id from public.restaurants where name = 'Review limit fixture 13'), 5, 'removed')$$,
+  $$insert into public.reviews (user_id, restaurant_id, rating, status) values (auth.uid(), 'd05e0000-0000-4000-8000-000000000013', 5, 'removed')$$,
   '42501', null, 'R12: authenticated cannot set review status'
 );
 select extensions.throws_ok(
@@ -153,8 +165,17 @@ select extensions.throws_ok(
   $$insert into public.reports (reporter_id, target_type, target_id, reason, created_at) values (auth.uid(), 'restaurant', gen_random_uuid(), 'test', now() - interval '30 days')$$,
   '42501', null, 'R17: authenticated cannot set report created_at'
 );
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+create temp table _r_canonical on commit drop as
+  select id from public.restaurants where name = 'f05e0000-canonical';
+select extensions.diag('>>> R8/R9 canonical restaurant id = '
+  || coalesce((select id::text from _r_canonical), 'MISSING'));
+
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"40444444-4444-4444-4444-444444444444","role":"authenticated"}';
 select extensions.throws_ok(
-  $$insert into public.saved_items (user_id, restaurant_id, list_type, created_at) values (auth.uid(), (select id from public.restaurants where name = 'Canonical restaurant'), 'want_to_try', now() - interval '30 days')$$,
+  $$insert into public.saved_items (user_id, restaurant_id, list_type, created_at) values (auth.uid(), (select id from _r_canonical), 'want_to_try', now() - interval '30 days')$$,
   '42501', null, 'R18: authenticated cannot set saved_items created_at'
 );
 select extensions.ok(
