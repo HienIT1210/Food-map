@@ -99,6 +99,47 @@ Run `supabase test db` on CI or with the local Supabase Docker stack running. No
 - `src/features/reviews/public-review-privacy.test.tsx` checks the rendered anonymous label, absence of profile links/IDs, the PostgREST request targeting only `public_reviews` with an explicit safe-column selection, and a simulated network response without `user_id`. The response schema is strict, so an unexpected field such as `user_id` is rejected.
 - CI database expected after M4 migration: seven SQL test files and 85 planned assertions (previous 77 plus M4's 8). Docker was unavailable locally; collect CI output before treating the DB checks as green. Do not run `db push` until the user chooses to apply the new M4 migration.
 
+## M5 review writes: regression changes and pending mutation check — 2026-10-09
+
+### What M5 changed for existing tests
+
+M5 revoked `INSERT`, `UPDATE` and `DELETE` on `public.reviews`, `public.review_photos` and `public.review_helpful` from `public`, `anon` and `authenticated`, and granted `EXECUTE` only on the ownership-checked RPCs. Every write test that used a direct table write therefore had to be re-pointed at the RPC, without weakening any security expectation.
+
+| Test | Before | After | Why the property still holds |
+|---|---|---|---|
+| `01` T8 | Direct review INSERT → `P0001` daily-limit trigger | Direct review INSERT → `42501` | The write is denied earlier (no table privilege). The limit itself now lives behind `save_review`; `08` proves an eleventh review is refused by the RPC. |
+| `01` T20, T22, T33 | Direct INSERT as another user / `anon` / banned user → `42501` | Unchanged expectation `42501` | Same SQLSTATE; the denial is now privilege-based rather than policy-based. Spoofed ownership is impossible because `save_review` never accepts a `user_id`. |
+| `01` T34 | `lives_ok` direct INSERT of a non-identifying path as `authenticated` | `lives_ok` `add_review_photo(...)` as the review owner | The only legitimate write path. Still proves a non-identifying path is accepted. |
+| `01` T35, T37 | `throws_ok 23514` as `authenticated` | Same assertion run as database owner | The `BEFORE` triggers only remain reachable on privileged maintenance writes; running them as owner tests the rule itself instead of the privilege wall. |
+| `01` T36 (old) | `authenticated` could insert an anonymous-review photo | `01` T36 accepts the review-UUID path as owner; `01` T38 asserts direct metadata INSERT → `42501` | Split into "the rule still permits the safe shape" plus "the API roles cannot bypass the RPC". |
+| `05` R20 | `authenticated` held column-level INSERT on `review_photos` | `authenticated` holds no table write on `review_photos` but holds `EXECUTE` on `add_review_photo` | Inverts the assertion to the M5 contract while keeping the same slot and the same "only these columns" intent. |
+| `05` R23 | `authenticated` held column-level INSERT on `reviews` | `authenticated` holds no table write on `reviews` but holds `EXECUTE` on `save_review` | Same as above. |
+
+`plan(38)` in `01` and `plan(24)` in `05` are unchanged; no test was deleted or commented out.
+
+### New coverage
+
+`supabase/tests/09_m5_review_rules_test.sql` — `plan(16)`, fixtures in the `a909...` UUID range:
+
+- `M5-02`/`M5-03`/`M5-04`: `anon` cannot execute the write RPCs; `authenticated` holds no table write on the three review tables but holds `EXECUTE` on all five RPCs.
+- `M5-05`/`M5-06`/`M5-07`: anonymous posting requires a verified email and a profile at least 24 hours old — refused for a young account, refused for an unverified account, allowed for an eligible one.
+- `M5-08`/`M5-09`: the anonymous review is visible through `public_reviews` with a null `author_id`.
+- `M5-10`/`M5-11`/`M5-12`: saving the same (user, restaurant, dish) target returns the same UUID, leaves exactly one row, and updates the rating in place.
+- `M5-13`: a sixth photo for one review is rejected by the server (`P0001`).
+- `M5-14`/`M5-15`: a review owner cannot vote their own review helpful, and a vote by another user derives `helpful_count` from the vote table rather than a client-supplied value.
+
+### Mutation check for the new M5 rule (pending CI evidence)
+
+The rule to attack: **API roles must not be able to write review data outside the ownership-checked RPCs, and anonymous review photos must not carry the owner UUID.**
+
+Mutation plan (one mutation at a time, on a temporary branch, PR never merged):
+
+1. Re-grant table-level `INSERT, UPDATE, DELETE ON public.reviews, public.review_photos, public.review_helpful TO authenticated` at the end of the M5 migration. Expected red: `05` R20 and R23, `09` M5-03, and `08`'s "review inserts must go through the validated RPC" / "review photo metadata writes must use the ownership-checked RPC".
+2. Weaken `add_review_photo`'s path check to `true`. Expected red: `01` T35 (blacklist still catches the owner UUID, proving the trigger is a backstop, not the primary control) and `09` where the path contract is asserted.
+3. Drop the `trg_enforce_review_system_fields` wiring. Expected red: `05` R11/R12/R13/R14 and `09` M5-04 once direct privilege is restored by mutation 1 — the trigger is only observable while a privileged write is possible, which is exactly why the wiring fix matters.
+
+Record the TAP test names and the failing lines here once CI reports them. Do not merge the mutation PR; delete the branch afterwards.
+
 ## pgTAP search_path regression rule — 2026-10-09
 
 - A test query that runs with `search_path = public` must be executed separately and its result stored (for example, in a temporary table). Restore `search_path = public, extensions` immediately before invoking **any** pgTAP function. Schema-qualifying `extensions.ok()` is not enough: pgTAP's internal `_todo()` resolution uses the caller's search path, which caused `function _todo() does not exist` in `07_m4_anon_read_test.sql`.

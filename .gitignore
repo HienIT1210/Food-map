@@ -41,5 +41,8 @@ Thumbs.db
 *.log
 .idea/
 
+# Windows sandbox permission-diagnosis backups (tooling scratch, never a deliverable)
+.acl-recovery/
+
 # Generated from the installed MapLibre GL JS version during postinstall
 /public/maplibre/*.mjs
