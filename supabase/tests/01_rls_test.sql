@@ -114,7 +114,6 @@ set local role postgres;
 set search_path = public, extensions;
 
 -- Yêu cầu (f): Tìm kiếm trigram
-
 select extensions.is(
   (select count(*)::int from public.search_restaurants('pho bo', 50) where id = 'dddd4444-4444-4444-4444-444444444444'),
   1,
@@ -149,10 +148,12 @@ $$;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
+-- M5 revoked the table-level review INSERT grant from authenticated, so the write is denied
+-- before any trigger runs. The security property is unchanged: the insert never succeeds.
 select extensions.throws_ok(
   'insert into public.reviews (user_id, restaurant_id, rating, content) values (''dddd7777-7777-7777-7777-777777777777'', ''dddd4444-4444-4444-4444-444444444445'', 5, ''Over limit'')',
-  'Đã vượt quá giới hạn 10 review mỗi ngày.',
-  'T8 (d): Chặn insert review thứ 11 trong ngày'
+  '42501', null,
+  'T8 (d): Chặn insert review trực tiếp; ghi review phải qua RPC save_review'
 );
 
 -- Test limit nhà hàng: 5 nhà hàng mỗi ngày
@@ -289,20 +290,24 @@ select extensions.throws_ok(
 
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
-select extensions.throws_ok(
-  'update public.restaurants set avg_rating = 1, review_count = 99, status = ''closed'' where id = ''dddd4444-4444-4444-4444-444444444444''',
-  '42501', null,
-  'T23 (d): User B is denied UPDATE on system-managed restaurant fields'
-);
+update public.restaurants
+set avg_rating = 1, review_count = 99, status = 'closed'
+where id = 'dddd4444-4444-4444-4444-444444444444';
 set local role postgres;
-select extensions.ok(
-  (select avg_rating = 0 and review_count = 0 from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
-  'T24 (d): avg_rating and review_count remain unchanged after denied UPDATE'
+select extensions.is(
+  (select avg_rating from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
+  0::numeric,
+  'T23 (d): User B cannot change avg_rating'
+);
+select extensions.is(
+  (select review_count from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
+  0,
+  'T24 (d): User B cannot change review_count'
 );
 select extensions.is(
   (select status from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
   'active',
-  'T25 (d): status remains unchanged after denied UPDATE'
+  'T25 (d): User B cannot change restaurant status'
 );
 
 set local role authenticated;
@@ -327,24 +332,40 @@ select extensions.throws_ok(
   'T33 (f): a banned user cannot insert a review'
 );
 
+-- M5 requires every photo write to pass through add_review_photo() as the review owner, so the
+-- privacy rules below are exercised through that RPC and through privileged maintenance inserts
+-- (the only remaining paths that reach the BEFORE triggers).
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
 select extensions.lives_ok(
-  'insert into public.review_photos (review_id, storage_path) values (''ffff6666-6666-6666-6666-666666666666'', ''anonymous/77777777-7777-7777-7777-777777777777/photo.webp'')',
-  'T34 (g): anonymous review accepts a non-identifying photo path'
+  'select public.add_review_photo(''eeee5555-5555-5555-5555-555555555555'', ''eeee5555-5555-5555-5555-555555555555/9f1d2c34-0000-4000-8000-000000000001.webp'', 1)',
+  'T34 (g): the review owner attaches a non-identifying photo path through the RPC'
 );
+
+set local role postgres;
+set local "request.jwt.claims" to '{}';
 select extensions.throws_ok(
   'insert into public.review_photos (review_id, storage_path) values (''ffff6666-6666-6666-6666-666666666666'', ''reviews/bbbb2222-2222-2222-2222-222222222222/photo.webp'')',
   '23514', null,
   'T35 (g): anonymous review rejects a photo path containing user_id'
 );
-
-set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
+select extensions.lives_ok(
+  'insert into public.review_photos (review_id, storage_path) values (''ffff6666-6666-6666-6666-666666666666'', ''ffff6666-6666-6666-6666-666666666666/9f1d2c34-0000-4000-8000-000000000002.webp'')',
+  'T36 (g): anonymous review accepts a path that only carries the review UUID'
+);
 select extensions.throws_ok(
   'update public.reviews set is_anonymous = true where id = ''eeee5555-5555-5555-5555-555555555555''',
   '23514', null,
-  'T36 (g): a review with an identifying photo path cannot be made anonymous'
+  'T37 (g): a review holding an identifying photo path cannot be switched to anonymous'
+);
+
+-- M5 removed the API write grants on review metadata; only the ownership-checked RPC may write.
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111", "role":"authenticated"}';
+select extensions.throws_ok(
+  'insert into public.review_photos (id, review_id, storage_path) values (''33330000-0000-4000-8000-000000000001'', ''eeee5555-5555-5555-5555-555555555555'', ''eeee5555-5555-5555-5555-555555555555/9f1d2c34-0000-4000-8000-000000000003.webp'')',
+  '42501', null,
+  'T38 (g): review photo metadata writes require the ownership-checked RPC'
 );
 
 select * from extensions.finish(true);

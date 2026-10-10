@@ -163,11 +163,15 @@ select extensions.ok(
   and has_column_privilege('authenticated', 'public.blocks', 'blocked_id', 'INSERT'),
   'R19: blocks permit only key-column inserts and no table-level update'
 );
+-- M5 moved every review, review_photo and helpful-vote write behind the ownership-checked RPCs,
+-- so the API roles must hold no INSERT/UPDATE/DELETE privilege on those tables at all. The
+-- assertions stay in the same slots (R20, R23) and keep the same security property.
 select extensions.ok(
-  has_column_privilege('authenticated', 'public.review_photos', 'review_id', 'INSERT')
-  and has_column_privilege('authenticated', 'public.review_photos', 'storage_path', 'INSERT')
-  and not has_table_privilege('authenticated', 'public.review_photos', 'INSERT'),
-  'R20: review photo insert is restricted to user-editable columns'
+  not has_table_privilege('authenticated', 'public.review_photos', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.review_photos', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.review_photos', 'DELETE')
+  and has_function_privilege('authenticated', 'public.add_review_photo(uuid,text,smallint)', 'EXECUTE'),
+  'R20: review photo writes require the RPC, not table privileges'
 );
 select extensions.ok(
   has_column_privilege('authenticated', 'public.saved_items', 'list_type', 'INSERT')
@@ -182,10 +186,11 @@ select extensions.ok(
   'R22: report insert excludes system-managed status'
 );
 select extensions.ok(
-  has_column_privilege('authenticated', 'public.reviews', 'content', 'INSERT')
-  and not has_column_privilege('authenticated', 'public.reviews', 'created_at', 'INSERT')
-  and not has_table_privilege('authenticated', 'public.reviews', 'INSERT'),
-  'R23: review insert excludes system-managed fields'
+  not has_table_privilege('authenticated', 'public.reviews', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.reviews', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.reviews', 'DELETE')
+  and has_function_privilege('authenticated', 'public.save_review(uuid,uuid,smallint,text,boolean)', 'EXECUTE'),
+  'R23: review writes require the RPC and expose no system-managed column grant'
 );
 select extensions.throws_ok(
   $$update public.reports set status = 'resolved' where reporter_id = auth.uid()$$,
