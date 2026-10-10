@@ -65,6 +65,23 @@ Job `database` báo `Files=9, Tests=62` rồi dừng. Ba nguyên nhân, mỗi ng
 1. **`01` T24 = false, và lần này `diag()` đã chỉ đúng nguyên nhân:** quán `dddd4444-…444` giữ `avg_rating=4.50 review_count=2` ở **mọi** mốc (trước T8, sau RPC T8, sau T9, sau T23). Quán này có đúng 2 review visible trong fixture (rating 5 của User A và review ẩn danh rating 4 của User B), và trigger `recalculate_restaurant_review_stats` của M5 tính trung bình thành 4.50 — trigger này **mới có ở M5**, nên kỳ vọng `0/0` cũ không còn đúng. T8/T20/T22/T23 không hề làm đổi giá trị. Đã sửa T24/T25 thành so sánh **trước/sau**: chụp hàng vào temp table ngay trước UPDATE bị từ chối (UPDATE cố ghi `1.00 / 99 / closed`), rồi khẳng định giá trị sau y hệt snapshot. Không bịa hằng số.
 2. **`09` vẫn 15/16.** Thủ phạm là biểu thức gộp `is(toggle_review_helpful(...) and (select helpful_count …) = 1, true)`: phần đọc chạy bằng `authenticated`, RLS ẩn hàng của người khác → NULL → `finish(true)` coi là lỗi cứng và dừng file. Đã tách thành hai assertion độc lập: `lives_ok` cho thao tác vote, rồi đọc lại `helpful_count` bằng `postgres`; thêm `diag()` in số hàng bảng vote và một mốc ngay trước `finish()` để lần sau thấy rõ assertion nào ngừng đếm.
 
+### 3.5. Vòng CI 4 (chỉ còn `09`): nguyên nhân thật là **plan khai sai**, không phải test bị mất
+
+Log cho thấy `09` khai `plan(16)` nhưng chạy đúng **15** assertion, tất cả đều pass. Kiểm tra bằng `git log`/`git show` trên chính file 09:
+
+| Commit | `plan` | Số dòng gọi assertion |
+|---|---|---|
+| `342c08c` (tạo file) | 16 | **14** |
+| `e5ab56e` | 16 | 14 |
+| `7fa6911` | 16 | 15 |
+| `3ac8d2c` | 16 | 15 |
+
+Kết luận: **file tạo ra đã khai `plan(16)` trong khi chỉ có 14 assertion, và nhãn bắt đầu từ `M5-02`** — `git grep M5-01` không thấy ở bất kỳ đâu trong repo. `git log -p` chỉ có dòng thêm và một lần tách nhãn, **không có test nào bị xoá/gộp/nằm trong khối không chạy**. Vậy đây là lệch nhãn + plan khai dư ngay từ đầu.
+
+**Đã sửa (không đổi ngữ nghĩa test):** đánh số lại tuần tự `M5-01 … M5-15` và đặt `plan(15)` đúng bằng số assertion thật (đếm bằng script duyệt ngoặc cân bằng, không đếm tay). Mọi quy tắc M5 trong mục 5.1 (1–12) cộng quy tắc đường dẫn ảnh đều đã có assertion — bảng đối chiếu nằm trong `docs/SECURITY-TESTS.md`.
+
+**Xác nhận thiết kế (người vote thấy 0 hàng `reviews` dưới vai `authenticated`):** đây là **chủ đích**, không phải RLS chặn nhầm. `docs/SPEC.md` dòng 320 yêu cầu "client không SELECT trực tiếp người khác", dòng 321 yêu cầu đọc công khai **qua view `public_reviews`**; policy `Users can view own reviews on public.reviews for select using (auth.uid() = user_id)` được tạo trong `20261004114000_init_schema.sql` kèm chú thích đúng ý đó. Muốn đọc `helpful_count` của review người khác thì đọc qua `public_reviews` hoặc bằng vai chủ sở hữu DB; **không nới policy** để test đọc được.
+
 **Bài học bổ sung:** khi fixture hợp lệ sinh ra giá trị dẫn xuất (`avg_rating`/`review_count` từ trigger), assertion phải so **trước/sau**, không so với hằng số tự chọn — hằng số sẽ âm thầm khẳng định "trigger không chạy", ngược yêu cầu milestone.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
@@ -185,7 +202,8 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-09 | Codex | Sinh code M5 (RPC ghi review, Storage ảnh, composer/MyReviews, xử lý ảnh xóa EXIF, i18n) + `08_m5_review_write_test.sql`. Local lint/tsc/test/build pass; hết token trước khi commit hai file đang sửa. | `2d3f083` |
 | 2026-10-09 | DeepSeek Harness | Tiếp quản M5 (vòng 1): khôi phục `PROGRESS.md` bị ghi đè; hoàn nguyên 2 chỗ sai trong `01_rls_test.sql` (T6/T11 `lim=10`, mất `role postgres` + clear JWT trước fixture); cập nhật 01/05 cho mô hình RPC M5; thêm `09_m5_review_rules_test.sql`; nối trigger `trg_enforce_review_system_fields`, thêm ràng buộc độ dài path, bỏ policy UPDATE Storage; `delete-account` dọn ảnh Storage. Bốn lệnh local pass. | `076b3d2` |
 | 2026-10-09 | DeepSeek Harness | Vòng 2 sau log CI đỏ: chuyển mọi ghi trực tiếp trong `01` sang `throws_ok(42501)` + đọc lại bằng vai đặc quyền (`plan(43)`); sửa lỗi chữ ký 42883 bằng cách đổi `p_rating`/`p_position` sang `integer` trong migration (lỗi ảnh hưởng cả PostgREST ở app), thêm `diag()` chữ ký hàm; thiết kế lại `delete_review` trả `storage_paths` thay vì xóa `storage.objects` bằng SQL, cập nhật `repository.ts` và test 08; ghi rủi ro `owner_id` vào `docs/PRIVACY-DESIGN.md`. Bốn lệnh local pass; chờ CI. | `4f69873` |
-| 2026-10-09 | DeepSeek Harness | Vòng 3 sau log CI thứ hai (Files=9, Tests=118, còn 3 lỗi): thêm `diag()` mốc giá trị cho T24 của `01` (không đổi hằng số kỳ vọng); `plan(13)`→`plan(14)` cho `08` kèm giải thích test thứ 14 là assertion cascade hợp lệ; tách M5-15 của `09` thành `lives_ok` + M5-16 đọc `helpful_count` bằng `postgres` (NULL do RLS chỉ cho thấy hàng của chính mình). Bốn lệnh local pass; chờ CI. | (commit vòng 3) |
+| 2026-10-09 | DeepSeek Harness | Vòng 3 sau log CI thứ hai (Files=9, Tests=118, còn 3 lỗi): thêm `diag()` mốc giá trị cho T24 của `01` (không đổi hằng số kỳ vọng); `plan(13)`→`plan(14)` cho `08` kèm giải thích test thứ 14 là assertion cascade hợp lệ; tách M5-15 của `09` thành `lives_ok` + M5-16 đọc `helpful_count` bằng `postgres` (NULL do RLS chỉ cho thấy hàng của chính mình). Bốn lệnh local pass; chờ CI. | `59af17c` |
+| 2026-10-09 | DeepSeek Harness | Vòng 4: sửa T24/T25 của `01` sang so sánh trước/sau bằng temp table (bằng chứng CI cho thấy quán 444 đúng là 4.50/2 do trigger M5 tính từ 2 review fixture, không phải 0/0); `09` plan khai dư từ lúc tạo file (14 assertion nhưng `plan(16)`, nhãn bắt đầu ở M5-02) → đánh số lại tuần tự M5-01…M5-15 và `plan(15)`. Xác nhận 0 hàng `reviews` dưới `authenticated` là chủ đích theo SPEC §7.1. Bốn lệnh local pass; chờ CI. | (commit vòng 4) |
 
 ## 10. Những gì đã đổi về quyền hệ thống ở lượt trước (để đối chiếu, KHÔNG lặp lại)
 

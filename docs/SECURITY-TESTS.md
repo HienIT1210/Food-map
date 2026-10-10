@@ -115,7 +115,30 @@ M5 revoked `INSERT`, `UPDATE` and `DELETE` on `public.reviews`, `public.review_p
 | `05` R20 | `authenticated` held column-level INSERT on `review_photos` | `authenticated` holds no table write on `review_photos` but holds `EXECUTE` on `add_review_photo` | Inverts the assertion to the M5 contract while keeping the same slot and the same "only these columns" intent. |
 | `05` R23 | `authenticated` held column-level INSERT on `reviews` | `authenticated` holds no table write on `reviews` but holds `EXECUTE` on `save_review` | Same as above. |
 
-`plan(43)` in `01`, `plan(24)` in `05`, `plan(14)` in `08` and `plan(16)` in `09`. No test was deleted or commented out.
+`plan(43)` in `01`, `plan(24)` in `05`, `plan(14)` in `08` and `plan(15)` in `09`. No test was deleted or commented out.
+
+**Fifth CI run (commit `4f69873`+, `09` only) — plan was simply wrong:** `09` declared `plan(16)` but contains **15** assertion calls, and its labels ran `M5-02 … M5-16` with no `M5-01` anywhere in the repository. Both defects are original to commit `342c08c`, which created the file with **14** assertion calls while declaring `plan(16)`; `git log -p` shows only additions and the one label split, so no test was ever deleted, merged away, or hidden in a block that does not run. The labels are now sequential `M5-01 … M5-15` and the plan is `15`, which is the assertion count — not a lowered expectation: every rule tested before is still tested. The assertion count is verified mechanically (a parser that walks balanced parentheses), not by eye.
+
+**M5 rule coverage after renumbering** (`docs/PROGRESS.md` §5.1 rules 1–12 plus the photo-path contract, all covered):
+
+| Rule | Assertion |
+|---|---|
+| 1. `check_review_limits` 10/24h via `auth.uid()` | `01` T8 (`P0001` from `save_review`) |
+| 2. `save_review` validation + anonymous age/email | `09` M5-04, M5-05, M5-06 |
+| 3. `delete_review` ownership + returned paths | `08` tests 13–14 |
+| 4. `my_review_for_target` / `my_reviews` scope | `08` my_reviews assertion; `09` M5-03 |
+| 5. `toggle_review_helpful` one vote, no self-vote | `09` M5-13, M5-14, M5-15 |
+| 6. `add_review_photo` ownership + path contract | `01` T34–T37, T38; `08` sixth-photo rejection |
+| 7. write grants revoked, RPC execute only | `09` M5-01, M5-02, M5-03; `05` R20, R23 |
+| 8. storage bucket size/type/policies | migration-level; asserted through M5-01–M5-03 privileges |
+| 9. photo cap of five | `09` M5-12 |
+| 10. restaurant `avg_rating`/`review_count` recompute | `01` T24/T25 (before/after snapshot) |
+| 11. `helpful_count` recompute from votes | `09` M5-15 |
+| 12. system fields enforced | `09` M5-09, M5-11; `05` R11–R15 |
+
+**RLS read-back rule (add to the fixture rules):** a read-back that must observe **another user's** row has to run as the database owner. Under `authenticated`, RLS turns the value into "no row", and an unguarded subquery then yields NULL rather than a comparable value — which pgTAP treats as a hard failure, not a soft one.
+
+**Design confirmation — a voter seeing zero `public.reviews` rows is intentional, not a misconfigured policy.** `docs/SPEC.md` line 320 requires exactly this: *"`reviews`: client không SELECT trực tiếp người khác. Chủ sở hữu có thể SELECT/UPDATE/DELETE review của chính mình"*, and line 321 adds *"Người dùng công khai chỉ đọc review qua view `public_reviews`"*. The mechanism is the `reviews` SELECT policy `using (auth.uid() = user_id)` created in `20261004114000_init_schema.sql`, which carries the source comment *"Client KHÔNG THỂ select trực tiếp review của người khác (dùng view public_reviews)"*; the public view is granted `select` to `anon, authenticated`. Reading another user's `helpful_count` straight from the table must therefore return no row — the count is read through `public_reviews` (which exposes `helpful_count`) or as the database owner. Tests must not treat the empty result as a bug, and must not widen the policy to make a read-back "work".
 
 **Third CI run (commit `4f69873`, Files=9, Tests=118) — three residual defects, all test-side:**
 
