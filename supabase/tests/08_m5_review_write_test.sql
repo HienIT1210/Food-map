@@ -1,7 +1,13 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select extensions.plan(13);
+-- plan counts every assertion in this file. The 14th is the privileged cascade read-back right
+-- below: the previous round replaced `is(delete_review(...), true)` with `lives_ok(...)` and added
+-- the review_photos count check, which is one assertion more than before. Both new assertions are
+-- listed here so a future reader can match plan to file:
+--   13) the review owner can delete their review through the RPC (lives_ok)
+--   14) deleting the review cascades its photo metadata rows (count back to 0 under postgres)
+select extensions.plan(14);
 
 -- CI diagnostic: a signature mismatch must show its own evidence instead of a bare 42883.
 select extensions.diag('>>> save_review args: '

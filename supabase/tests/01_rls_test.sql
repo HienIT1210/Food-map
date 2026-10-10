@@ -173,16 +173,36 @@ begin
 end;
 $$;
 
+-- T24 compares against a fixed expected value (0/0), so record the same baseline before the
+-- RPC-based tests run. If the two ever disagree, the fixture changed mid-file and the assertion
+-- would otherwise fail with no evidence of when.
+set local role postgres;
+select extensions.diag('>>> BEFORE T8/T20/T22: restaurant dddd4444-...444 avg_rating='
+  || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' review_count='
+  || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' (expected for T24: 0 / 0)');
+
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
--- M5 routes every review write through save_review, so the daily cap is asserted on the RPC that
--- the app actually calls. The 10 fixture rows above leave User D exactly at the limit.
+-- M5 routes every review write through save_review, so the daily cap is asserted on the RPC the
+-- app actually calls. The 10 fixture rows above leave User D exactly at the limit.
 select extensions.throws_ok(
   $$select public.save_review('dddd4444-4444-4444-4444-444444444445', null, 5, 'Over limit', false)$$,
   'P0001', null,
   'T8 (d): save_review chặn review thứ 11 trong ngày (giới hạn ép ở database)'
 );
+
+-- Evidence for T24: does the denied RPC leave restaurant 444 alone?
+set local role postgres;
+select extensions.diag('>>> AFTER T8 RPC: restaurant dddd4444-...444 avg_rating='
+  || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' review_count='
+  || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' (expected: 0 / 0)');
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
 -- Test limit nhà hàng: 5 nhà hàng mỗi ngày
 set local role authenticated;
@@ -200,6 +220,15 @@ select extensions.throws_ok(
   'Đã vượt quá giới hạn tạo 5 địa điểm mỗi ngày.',
   'T9 (d): Chặn insert nhà hàng thứ 6 trong ngày'
 );
+
+-- Evidence for T24: has anything touched restaurant 444 by the end of T9?
+set local role postgres;
+select extensions.diag('>>> AFTER T9: restaurant dddd4444-...444 avg_rating='
+  || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' review_count='
+  || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' reviews-for-444=' || (select count(*)::text from public.reviews where restaurant_id = 'dddd4444-4444-4444-4444-444444444444')
+  || ' (expected: 0 / 0 / 1)');
 
 -- ==============================================================================
 -- KIỂM CHỨNG TÍNH ĐỘC LẬP SEARCH_PATH (MÔ PHỎNG SUPABASE CLOUD PHIÊN GỌI CHỈ CÓ PUBLIC)
@@ -332,6 +361,13 @@ select extensions.throws_ok(
   'T23 (d): User B is denied the system-managed restaurant UPDATE'
 );
 set local role postgres;
+-- Evidence for T24: print what the row holds now, what the assertion expects, and whether the
+-- earlier RPC-based tests moved it. The expectation stays 0/0; the constants are not the variable.
+select extensions.diag('>>> AFTER T23: restaurant dddd4444-...444 avg_rating='
+  || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' review_count='
+  || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' (expected: 0 / 0)');
 select extensions.is(
   (select avg_rating = 0 and review_count = 0 from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
   true,

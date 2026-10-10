@@ -136,7 +136,7 @@ select extensions.throws_ok(
   'P0001', null, 'M5-13: a sixth photo for the same review is rejected by the server'
 );
 
--- 14-15: helpful votes are one per (review, user), never self-votes, and the counter is derived.
+-- 14-16: helpful votes are one per (review, user), never self-votes, and the counter is derived.
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000004","role":"authenticated"}';
 select extensions.throws_ok(
@@ -144,11 +144,32 @@ select extensions.throws_ok(
   '42501', null, 'M5-14: a review owner cannot mark their own review helpful'
 );
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000001","role":"authenticated"}';
+
+-- Evidence for M5-15. helpful_count must be read as postgres: the reviews RLS policy only exposes
+-- rows owned by auth.uid(), so an authenticated read of another user's review returns no row and
+-- the comparison collapses to NULL instead of true/false.
+select extensions.diag('>>> BEFORE M5-15: role=' || current_user::text
+  || ' auth.uid=' || coalesce(auth.uid()::text, 'NULL')
+  || ' reviews-visible-to-role='
+  || (select count(*)::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020')
+  || ' helpful_count-via-public_reviews='
+  || coalesce((select helpful_count::text from public.public_reviews where id = 'a9090000-0000-4000-8000-000000000020'), 'NULL'));
+
+select extensions.lives_ok(
+  $$select public.toggle_review_helpful('a9090000-0000-4000-8000-000000000020')$$,
+  'M5-15: a helpful vote by another user is accepted'
+);
+
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+select extensions.diag('>>> AFTER M5-15: role=' || current_user::text
+  || ' review_rows=' || (select count(*)::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020')
+  || ' helpful_count=' || coalesce((select helpful_count::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'), 'NULL')
+  || ' (expected: 1 / 1)');
 select extensions.is(
-  public.toggle_review_helpful('a9090000-0000-4000-8000-000000000020')
-  and (select helpful_count from public.reviews where id = 'a9090000-0000-4000-8000-000000000020') = 1,
-  true,
-  'M5-15: a helpful vote by another user derives helpful_count from the vote table'
+  (select helpful_count from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'),
+  1,
+  'M5-16: the vote derives helpful_count from the vote table, not from client input'
 );
 
 select * from extensions.finish(true);
