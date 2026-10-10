@@ -8,30 +8,45 @@ select extensions.plan(62);
 
 -- ---------------------------------------------------------------------------
 -- Shared helper: throws_ok's third argument is a MESSAGE pattern, so a test that needs the HINT
--- (or the detail) cannot use it. This runs the statement in its own subtransaction, captures
--- sqlstate/message/hint/detail and returns them, so callers assert sqlstate and hint separately.
+-- (or the detail) cannot use it. This runs the statement in its own subtransaction and returns
+-- exactly ONE row.
+--   * the statement raised: err_sqlstate/err_message/err_hint/err_detail hold the diagnostics
+--   * the statement succeeded: one row of NULLs, so a caller assertion fails instead of the file
+--     erroring out
+-- The output columns must NOT be named sqlstate or sqlerrm: PL/pgSQL declares those as CONSTANT
+-- special variables, and an output column of the same name makes the function collide with them
+-- ("variable sqlstate is declared CONSTANT"). Locals + RETURN QUERY keep the naming clean, and
+-- plain RETURN after the exception arm guarantees only one row is produced (two rows would break
+-- the scalar `select hint from ...` calls with "more than one row returned by a subquery").
+-- It lives in public, not pg_temp, because the tests switch to the authenticated role and
+-- pg_temp schema access for other roles is not guaranteed.
 -- ---------------------------------------------------------------------------
-create function pg_temp.capture_error(p_sql text)
-returns table (sqlstate text, message text, hint text, detail text)
+create function public.m6_capture_error(p_sql text)
+returns table (err_sqlstate text, err_message text, err_hint text, err_detail text)
 language plpgsql
 as $$
+declare
+  v_sqlstate text;
+  v_message text;
+  v_hint text;
+  v_detail text;
 begin
   begin
     execute p_sql;
   exception when others then
     get stacked diagnostics
-      sqlstate = returned_sqlstate,
-      message = message_text,
-      hint = pg_exception_hint,
-      detail = pg_exception_detail;
-    return next;
+      v_sqlstate = returned_sqlstate,
+      v_message = message_text,
+      v_hint = pg_exception_hint,
+      v_detail = pg_exception_detail;
+    return query select v_sqlstate, v_message, v_hint, v_detail;
+    return;
   end;
-  -- No exception: return one row with NULLs so a caller assertion fails instead of erroring out.
-  sqlstate := null; message := null; hint := null; detail := null;
-  return next;
+  return query select null::text, null::text, null::text, null::text;
 end;
 $$;
-grant execute on function pg_temp.capture_error(text) to public;
+revoke all on function public.m6_capture_error(text) from public, anon, authenticated;
+grant execute on function public.m6_capture_error(text) to anon, authenticated;
 
 -- First CI run evidence: print every new signature so a mismatch is never a bare 42883.
 select extensions.diag('>>> create_restaurant args: '
@@ -241,17 +256,17 @@ select extensions.throws_ok(
 );
 -- The hint is a separate column of the error, so it must be captured and asserted separately:
 -- throws_ok's third argument is a message pattern and cannot match a hint.
-select extensions.is((select hint from pg_temp.capture_error(
+select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)),
   'duplicate_restaurant',
   'M6-21: the duplicate refusal carries the duplicate_restaurant hint'
 );
 select extensions.diag('>>> duplicate refusal captured: sqlstate='
-  || coalesce((select sqlstate from pg_temp.capture_error(
+  || coalesce((select err_sqlstate from public.m6_capture_error(
        $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)), 'NULL')
-  || ' hint=' || coalesce((select hint from pg_temp.capture_error(
+  || ' hint=' || coalesce((select err_hint from public.m6_capture_error(
        $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)), 'NULL')
-  || ' detail=' || coalesce((select detail from pg_temp.capture_error(
+  || ' detail=' || coalesce((select err_detail from public.m6_capture_error(
        $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)), 'NULL'));
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Bún', 'confirmed as a different place', 21.0101, 105.8101, null, '[]'::jsonb, true)$$,
@@ -293,19 +308,19 @@ select extensions.diag('>>> before the N+1 call: app.restaurant_daily_limit='
       where created_by = 'a6060000-0000-4000-8000-000000000004'
         and created_at >= now() - interval '1 day')
   || ' trigger reads the same setting since M6');
-select extensions.is((select sqlstate from pg_temp.capture_error(
+select extensions.is((select err_sqlstate from public.m6_capture_error(
   $$select public.create_restaurant('M6 Quota Sáu', '19 M6 Street', 21.13, 105.93)$$)),
   'P0001',
   'M6-28: the N+1 call fails with the P0001 quota error'
 );
-select extensions.is((select hint from pg_temp.capture_error(
+select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Quota Sáu', '19 M6 Street', 21.13, 105.93)$$)),
   'restaurant_daily_limit',
   'M6-29: the N+1 refusal carries the restaurant_daily_limit hint'
 );
 -- Quota is checked before the duplicate guard (ASSUMPTIONS M6-12): a call that is both over quota
 -- and a duplicate must report the quota.
-select extensions.is((select hint from pg_temp.capture_error(
+select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)),
   'restaurant_daily_limit',
   'M6-30: an over-quota duplicate reports the quota hint, not the duplicate hint'
@@ -350,7 +365,7 @@ select extensions.lives_ok(
   $$select public.create_restaurant('M6 Limit Hai 2', '21 M6 Street', 21.21, 105.71)$$,
   'M6-33: with app.restaurant_daily_limit=2 the second place is allowed'
 );
-select extensions.is((select hint from pg_temp.capture_error(
+select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Limit Hai 3', '22 M6 Street', 21.22, 105.72)$$)),
   'restaurant_daily_limit',
   'M6-34: the third place is refused by the configured limit, not a hard-coded five'

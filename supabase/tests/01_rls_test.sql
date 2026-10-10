@@ -11,28 +11,41 @@ set search_path = public, extensions;
 select extensions.plan(52);
 
 -- Shared helper: throws_ok's third argument is a MESSAGE pattern, so a test that needs the HINT
--- must capture the error instead. This runs the statement in its own subtransaction and returns
--- sqlstate/message/hint/detail, letting a caller assert sqlstate and hint as separate tests.
-create function pg_temp.capture_error(p_sql text)
-returns table (sqlstate text, message text, hint text, detail text)
+-- must capture the error instead. It runs the statement in its own subtransaction and returns
+-- exactly ONE row: the diagnostics when the statement raised, otherwise one row of NULLs so a
+-- caller assertion fails instead of the file erroring out. Output columns are named err_* because
+-- PL/pgSQL declares `sqlstate` and `sqlerrm` as CONSTANT special variables (an output column with
+-- those names raises "variable sqlstate is declared CONSTANT"), and the exception arm ends with a
+-- plain RETURN so no second row is produced (a second row would break scalar `select err_hint ...`
+-- with "more than one row returned by a subquery"). It lives in public, not pg_temp, because the
+-- tests switch to the authenticated role and pg_temp schema access for another role is not
+-- guaranteed.
+create function public.m6_capture_error(p_sql text)
+returns table (err_sqlstate text, err_message text, err_hint text, err_detail text)
 language plpgsql
 as $$
+declare
+  v_sqlstate text;
+  v_message text;
+  v_hint text;
+  v_detail text;
 begin
   begin
     execute p_sql;
   exception when others then
     get stacked diagnostics
-      sqlstate = returned_sqlstate,
-      message = message_text,
-      hint = pg_exception_hint,
-      detail = pg_exception_detail;
-    return next;
+      v_sqlstate = returned_sqlstate,
+      v_message = message_text,
+      v_hint = pg_exception_hint,
+      v_detail = pg_exception_detail;
+    return query select v_sqlstate, v_message, v_hint, v_detail;
+    return;
   end;
-  sqlstate := null; message := null; hint := null; detail := null;
-  return next;
+  return query select null::text, null::text, null::text, null::text;
 end;
 $$;
-grant execute on function pg_temp.capture_error(text) to public;
+revoke all on function public.m6_capture_error(text) from public, anon, authenticated;
+grant execute on function public.m6_capture_error(text) to anon, authenticated;
 
 -- CI diagnostics: print the live signatures so a test/function mismatch shows its own evidence
 -- instead of a bare 42883. These diag() calls do not consume a plan slot.
@@ -271,14 +284,14 @@ select extensions.throws_ok(
 -- The hint is a separate field of the error, not the message, so it needs its own assertion.
 -- A19 (assertion 19 of 52)
 select extensions.is(
-  (select hint from pg_temp.capture_error(
+  (select err_hint from public.m6_capture_error(
      $$select public.create_restaurant('Quán D quota 6', null, 21.0600, 105.8600)$$)),
   'restaurant_daily_limit',
   'T9f2 (d): lỗi giới hạn quán mang hint restaurant_daily_limit'
 );
 -- A20 (assertion 20 of 52)
 select extensions.is(
-  (select sqlstate from pg_temp.capture_error(
+  (select err_sqlstate from public.m6_capture_error(
      $$select public.create_restaurant('Quán D quota 6', null, 21.0600, 105.8600)$$)),
   'P0001',
   'T9f3 (d): lỗi giới hạn quán có SQLSTATE P0001'
