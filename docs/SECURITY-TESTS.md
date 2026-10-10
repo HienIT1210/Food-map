@@ -2,9 +2,9 @@
 
 This document records the M1 RLS hardening tests and the deliberate mutation checks run against GitHub Actions. Mutation PRs were closed without merging; the intended implementation is in PR #2.
 
-## M6 — restaurant creation, duplicate guard and reports (`supabase/tests/10_m6_restaurant_creation_test.sql`, `plan(43)`)
+## M6 — restaurant creation, duplicate guard and reports (`supabase/tests/10_m6_restaurant_creation_test.sql`, `plan(49)`)
 
-Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are sequential `M6-01 … M6-43`; the count is produced by a parser that walks balanced parentheses, not by hand.
+Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are sequential `M6-01 … M6-49`; the count is produced by a parser that walks balanced parentheses, not by hand.
 
 | Assertion | Rule under test |
 |---|---|
@@ -20,7 +20,7 @@ Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are se
 | M6-10 | Same name far away (>50 m) is not a duplicate |
 | M6-11 | Matching ignores accents and letter case (RES-03, `f_unaccent` + `pg_trgm`) |
 | M6-12 | A different name inside the radius is not a duplicate |
-| M6-13 | `authenticated` has no SELECT on `restaurants.created_by` |
+| M6-13 | `authenticated` has no SELECT on `restaurants.created_by` (column-level) |
 | M6-14 | A signed-in user can create a restaurant |
 | M6-15 | `source='user'`, `status='active'`, `created_by = auth.uid()` (set by the M3 trigger) |
 | M6-16 | `create_restaurant` accepts the optional dish list |
@@ -49,10 +49,24 @@ Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are se
 | M6-41 | A hidden restaurant disappears from `search_restaurants` |
 | M6-42 | A user with no reports cannot read anyone else's reports |
 | M6-43 | `anon` keeps the safe restaurant columns but has no SELECT on `created_by` |
+| M6-44 | Neither API role holds **table-level** SELECT on `restaurants` |
+| M6-45 | The public columns (id/status/review_count/created_at…) stay readable |
+| M6-46 | A catalog sweep: **every** column except `created_by` is granted to `anon` |
+| M6-47 | The same sweep for `authenticated` |
+| M6-48 | Behavioural: `select created_by from public.restaurants` as `anon` raises 42501 |
+| M6-49 | Behavioural: the same statement as `authenticated` raises 42501 |
 
-**Rule implemented outside 10 but recorded here:** the `created_by` column is revoked from `anon`/`authenticated`, so `select created_by from restaurants` over PostgREST fails with 42501 and no map/search/detail response can carry it. `restaurant_detail(uuid)` never selected the column; `restaurants_in_bounds`, `search_restaurants`, `find_duplicate_restaurants` and `check_duplicate_restaurant` return only safe fields.
+**`REVOKE ... ON COLUMN` does not exist in PostgreSQL** (it raises 42601, which is exactly how the first CI attempt failed before any pgTAP ran). The contract is therefore: drop the **table-level** SELECT grant, then `GRANT SELECT (explicit column list)` to `anon`/`authenticated` without `created_by`. Revoking a single column while the table grant survives would have no effect, so that is never used. `M6-46`/`M6-47` compare the live catalog against the live privileges, so adding a column without granting it fails CI instead of silently hiding it — the rule that a new `restaurants` column must be granted explicitly is recorded in `docs/ASSUMPTIONS.md` M6-11.
 
-**Known gaps (stated, not hidden):** the pgTAP file has never run locally because this machine has no Docker, so all M6 database assertions are unverified until CI runs them. The 50 m radius is exercised with one near pair and one far pair; the similarity threshold's 0.4 boundary is not probed at its exact edge.
+**Audit of the surrounding code (done, results recorded):**
+
+- `src/` contains **no** direct query on the `restaurants` table at all (no `.from("restaurants")`, so no `select("*")` or empty select to fix); the client reads places exclusively through `restaurants_in_bounds`, `search_restaurants`, `restaurant_detail` and `check_duplicate_restaurant`.
+- `supabase/functions/` contains no query on `restaurants` either.
+- Every restaurant-reading RPC (`restaurants_in_bounds`, `search_restaurants`, `restaurant_detail`, `find_duplicate_restaurants`, `check_duplicate_restaurant`) is `security invoker`, so it runs with the caller's privileges. All of them reference only `id, name, address, province, location, status, avg_rating, review_count, created_at`, which the explicit grant still covers. `created_by` is read only inside `security definer` code (`report_restaurant`, `check_restaurant_limits`, `enforce_restaurant_report_threshold`), which runs with owner privileges.
+- The `restaurants` SELECT policy `using (status = 'active')` filters rows, not columns, so it is unaffected; the INSERT policy that compares `auth.uid() = created_by` is now unreachable because INSERT is revoked.
+- Old tests that read `restaurants` directly (`01` diagnostics/snapshot, `03` seed counts, `04` rating fixtures, `06` only via the RPC) all do so under the `postgres` role, so they keep the table grant; `01`'s `anon`/`authenticated` reads go through `public_reviews`, not through `restaurants`.
+
+**Known gaps (stated, not hidden):** no M6 pgTAP assertion has ever executed — this machine has no Docker, so `supabase start` and `supabase test db` only run in CI, and the first M6 CI attempt failed during migration parsing before pgTAP. The 50 m radius is exercised with one near pair and one far pair; the similarity threshold's 0.4 boundary is not probed at its exact edge; and the `created_by` privilege checks rest on `has_column_privilege`/`information_schema`, which have not yet run against a real database in this session.
 
 ## Mutation Evidence
 
