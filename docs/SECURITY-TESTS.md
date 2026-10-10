@@ -115,7 +115,17 @@ M5 revoked `INSERT`, `UPDATE` and `DELETE` on `public.reviews`, `public.review_p
 | `05` R20 | `authenticated` held column-level INSERT on `review_photos` | `authenticated` holds no table write on `review_photos` but holds `EXECUTE` on `add_review_photo` | Inverts the assertion to the M5 contract while keeping the same slot and the same "only these columns" intent. |
 | `05` R23 | `authenticated` held column-level INSERT on `reviews` | `authenticated` holds no table write on `reviews` but holds `EXECUTE` on `save_review` | Same as above. |
 
-`plan(43)` in `01` and `plan(24)` in `05`; `08` is `plan(13)` and `09` is `plan(16)`. No test was deleted or commented out.
+`plan(43)` in `01`, `plan(24)` in `05`, `plan(14)` in `08` and `plan(16)` in `09`. No test was deleted or commented out.
+
+**Third CI run (commit `4f69873`, Files=9, Tests=118) — three residual defects, all test-side:**
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `01` T24 `avg_rating and review_count remain unchanged` = false | The assertion compares against the fixed 0/0 baseline, but nothing printed the row's state before the RPC-based tests ran, so the run could not show whether T8/T20/T22 or T23 moved it. | `diag()` before T8/T20/T22, after the T8 RPC, after T9 and after T23 print `avg_rating`, `review_count` and the number of reviews for restaurant 444. Expected values stay 0/0. |
+| `08` planned 13 but ran 14 | The previous round replaced `is(delete_review(...), true)` with `lives_ok(...)` **and** added a `review_photos` count read-back, i.e. one assertion more. | `plan(14)`; the file now lists which two assertions those are and why each is correct on its own (owner delete succeeds; the cascade removes the metadata rows). |
+| `09` M5-15 returned NULL and the file stopped at 14/16 | The counter was read as `authenticated`, and the `reviews` RLS policy only exposes rows owned by `auth.uid()`. Reading another user's review therefore returns **no row**, so `toggle(...) and (select helpful_count ...) = 1` collapses to NULL. `pgTAP`'s strict `finish(true)` then aborts the file before M5-16 (the null-`author_id` assertion) runs. | Split into `lives_ok` for the vote and a separate `M5-16` read-back under `postgres`; `diag()` prints the review row, `current_user`, `auth.uid()` and the visible row count before and after. |
+
+**RLS read-back rule (add to the fixture rules):** a read-back that must observe **another user's** row has to run as the database owner. Under `authenticated`, RLS turns the value into "no row", and an unguarded subquery then yields NULL rather than a comparable value — which pgTAP treats as a hard failure, not a soft one.
 
 **Why `01` moved from `plan(38)` to `plan(43)` (CI run 1 evidence):** the first M5 CI run stopped at `01_rls_test.sql` line 102 with `permission denied for table reviews`. That line was a **bare** `UPDATE` (and the next line a bare `DELETE`) whose comment claimed RLS would silently match zero rows. M5 revoked the table-level write grants, so those statements now raise `42501` and, being unasserted, they aborted the whole file at 6/38. Every such write must therefore become its own `throws_ok(..., '42501')` slot, which is five assertions more than the old bare statements consumed (T5 split into `T5a`/`T5b`, plus the `T8`, `T23` and `T38` denials that used to be unasserted or asserted only through read-backs). The plan number is the only thing that changed; T1-T38 still cover the same rules. `diag()` calls print the live `save_review`, `add_review_photo` and `delete_review` signatures so a mismatch is never a bare `42883`.
 
