@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
-select extensions.plan(16);
+select extensions.plan(15);
 
 -- CI diagnostic: a signature mismatch must show its own evidence instead of a bare 42883.
 select extensions.diag('>>> save_review args: '
@@ -51,7 +51,7 @@ select extensions.ok(
   not has_function_privilege('anon', 'public.save_review(uuid,uuid,integer,text,boolean)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.toggle_review_helpful(uuid)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.add_review_photo(uuid,text,integer)', 'EXECUTE'),
-  'M5-02: anon cannot execute the review write RPCs'
+  'M5-01: anon cannot execute the review write RPCs'
 );
 select extensions.ok(
   not has_table_privilege('authenticated', 'public.reviews', 'INSERT')
@@ -62,7 +62,7 @@ select extensions.ok(
   and not has_table_privilege('authenticated', 'public.review_photos', 'DELETE')
   and not has_table_privilege('authenticated', 'public.review_helpful', 'INSERT')
   and not has_table_privilege('authenticated', 'public.review_helpful', 'DELETE'),
-  'M5-03: review tables expose no direct write privileges to authenticated'
+  'M5-02: review tables expose no direct write privileges to authenticated'
 );
 select extensions.ok(
   has_function_privilege('authenticated', 'public.save_review(uuid,uuid,integer,text,boolean)', 'EXECUTE')
@@ -70,7 +70,7 @@ select extensions.ok(
   and has_function_privilege('authenticated', 'public.my_reviews()', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.toggle_review_helpful(uuid)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.add_review_photo(uuid,text,integer)', 'EXECUTE'),
-  'M5-04: authenticated keeps execute on every review mutation RPC'
+  'M5-03: authenticated keeps execute on every review mutation RPC'
 );
 
 -- 4-6: anonymous reviews require a verified account at least 24 hours old, enforced in the database.
@@ -78,17 +78,17 @@ set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000002","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.save_review('a9090000-0000-4000-8000-000000000002', null, 5, 'Anonymous too soon', true)$$,
-  '42501', null, 'M5-05: an account younger than 24 hours cannot post anonymously'
+  '42501', null, 'M5-04: an account younger than 24 hours cannot post anonymously'
 );
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000003","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.save_review('a9090000-0000-4000-8000-000000000002', null, 5, 'Anonymous unverified', true)$$,
-  '42501', null, 'M5-06: an account without a verified email cannot post anonymously'
+  '42501', null, 'M5-05: an account without a verified email cannot post anonymously'
 );
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.save_review('a9090000-0000-4000-8000-000000000002', null, 5, 'Anonymous eligible', true)$$,
-  'M5-07: a verified account older than 24 hours can post anonymously'
+  'M5-06: a verified account older than 24 hours can post anonymously'
 );
 
 -- 8-11: the (user, restaurant, dish) target collapses to one row and system fields stay derived.
@@ -96,18 +96,18 @@ select extensions.is(
   (select count(*)::int from public.public_reviews
    where restaurant_id = 'a9090000-0000-4000-8000-000000000002' and is_anonymous),
   1,
-  'M5-08: an anonymous review is exposed through public_reviews'
+  'M5-07: an anonymous review is exposed through public_reviews'
 );
 select extensions.is(
   (select author_id from public.public_reviews
    where restaurant_id = 'a9090000-0000-4000-8000-000000000002'),
   null::uuid,
-  'M5-09: the anonymous review exposes a null author_id'
+  'M5-08: the anonymous review exposes a null author_id'
 );
 select extensions.is(
   length(public.save_review('a9090000-0000-4000-8000-000000000002', null, 3, 'Updated in place', false)::text),
   36,
-  'M5-10: saving the same target again returns the existing review UUID'
+  'M5-09: saving the same target again returns the existing review UUID'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -116,14 +116,14 @@ select extensions.is(
    where user_id = 'a9090000-0000-4000-8000-000000000001'
      and restaurant_id = 'a9090000-0000-4000-8000-000000000002'),
   1,
-  'M5-11: the unique (user, restaurant, dish) target never duplicates a review row'
+  'M5-10: the unique (user, restaurant, dish) target never duplicates a review row'
 );
 select extensions.is(
   (select rating from public.reviews
    where user_id = 'a9090000-0000-4000-8000-000000000001'
      and restaurant_id = 'a9090000-0000-4000-8000-000000000002'),
   3::smallint,
-  'M5-12: the second save updated the same row instead of inserting'
+  'M5-11: the second save updated the same row instead of inserting'
 );
 
 -- 13: at most five photos per review, enforced by the table trigger.
@@ -133,22 +133,22 @@ select 'a9090000-0000-4000-8000-000000000020',
 from generate_series(1, 5) as series(n);
 select extensions.throws_ok(
   $$insert into public.review_photos (review_id, storage_path, position) values ('a9090000-0000-4000-8000-000000000020', 'a9090000-0000-4000-8000-000000000020/photo-6.jpg', 6)$$,
-  'P0001', null, 'M5-13: a sixth photo for the same review is rejected by the server'
+  'P0001', null, 'M5-12: a sixth photo for the same review is rejected by the server'
 );
 
--- 14-16: helpful votes are one per (review, user), never self-votes, and the counter is derived.
+-- 14-15: helpful votes are one per (review, user), never self-votes, and the counter is derived.
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000004","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.toggle_review_helpful('a9090000-0000-4000-8000-000000000020')$$,
-  '42501', null, 'M5-14: a review owner cannot mark their own review helpful'
+  '42501', null, 'M5-13: a review owner cannot mark their own review helpful'
 );
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000001","role":"authenticated"}';
 
--- Evidence for M5-15/M5-16. helpful_count must be read as postgres: the reviews RLS policy only
+-- Evidence for M5-14/M5-15. helpful_count must be read as postgres: the reviews RLS policy only
 -- exposes rows owned by auth.uid(), so an authenticated read of another user's review returns no
 -- row and the comparison collapses to NULL (which pgTAP treats as a hard failure).
-select extensions.diag('>>> BEFORE M5-15: role=' || current_user::text
+select extensions.diag('>>> BEFORE M5-14: role=' || current_user::text
   || ' auth.uid=' || coalesce(auth.uid()::text, 'NULL')
   || ' reviews-visible-to-role='
   || (select count(*)::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020')
@@ -157,12 +157,12 @@ select extensions.diag('>>> BEFORE M5-15: role=' || current_user::text
 
 select extensions.lives_ok(
   $$select public.toggle_review_helpful('a9090000-0000-4000-8000-000000000020')$$,
-  'M5-15: a helpful vote by another user is accepted'
+  'M5-14: a helpful vote by another user is accepted'
 );
 
 set local role postgres;
 set local "request.jwt.claims" to '{}';
-select extensions.diag('>>> AFTER M5-15: role=' || current_user::text
+select extensions.diag('>>> AFTER M5-14: role=' || current_user::text
   || ' review_rows=' || (select count(*)::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020')
   || ' helpful_count=' || coalesce((select helpful_count::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'), 'NULL')
   || ' review_helpful_rows=' || (select count(*)::text from public.review_helpful where review_id = 'a9090000-0000-4000-8000-000000000020')
@@ -170,7 +170,7 @@ select extensions.diag('>>> AFTER M5-15: role=' || current_user::text
 select extensions.is(
   (select helpful_count from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'),
   1,
-  'M5-16: the vote derives helpful_count from the vote table, not from client input'
+  'M5-15: the vote derives helpful_count from the vote table, not from client input'
 );
 select extensions.diag('>>> reached the end of 09 before finish()');
 
