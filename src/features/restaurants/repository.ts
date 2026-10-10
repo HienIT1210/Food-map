@@ -1,12 +1,18 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/client";
 import {
+  createRestaurantInputSchema,
+  duplicateRestaurantSchema,
   restaurantDetailsSchema,
   restaurantDishSchema,
+  restaurantReportReasonSchema,
   restaurantSearchResultSchema,
+  type DuplicateRestaurant,
   type RestaurantDish,
   type RestaurantDetails,
+  type RestaurantReportReason,
   type RestaurantSearchResult,
+  type CreateRestaurantInput,
 } from "./types";
 
 const restaurantDishesSchema = z.array(z.object({
@@ -16,6 +22,71 @@ const restaurantDishesSchema = z.array(z.object({
 
 function throwIfError(error: { message: string } | null): void {
   if (error) throw new Error(error.message);
+}
+
+/** A create refusal the UI must explain specifically instead of showing a generic failure. */
+export class RestaurantWriteError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string | null,
+    public readonly hint: string | null,
+  ) {
+    super(message);
+    this.name = "RestaurantWriteError";
+  }
+}
+
+function writeError(error: { message: string; code?: string | null; hint?: string | null } | null): Error | null {
+  if (!error) return null;
+  return new RestaurantWriteError(error.message, error.code ?? null, error.hint ?? null);
+}
+
+export async function checkDuplicateRestaurant(
+  name: string,
+  lat: number,
+  lng: number,
+  signal: AbortSignal,
+): Promise<DuplicateRestaurant[]> {
+  const supabase = createClient();
+  // The RPC signature is (name text, lat float, lng float); a bare JSON number resolves to double
+  // precision on the PostgREST side, which is what the float parameters accept.
+  const { data, error } = await supabase
+    .rpc("check_duplicate_restaurant", { name, lat, lng })
+    .abortSignal(signal);
+  throwIfError(error);
+  return duplicateRestaurantSchema.array().parse(data ?? []);
+}
+
+export async function createRestaurant(input: CreateRestaurantInput): Promise<string> {
+  const parsed = createRestaurantInputSchema.parse(input);
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("create_restaurant", {
+    p_name: parsed.name,
+    p_address: parsed.address,
+    p_lat: parsed.lat,
+    p_lng: parsed.lng,
+    p_province: parsed.province,
+    p_dishes: parsed.dishes,
+    p_confirm_new: parsed.confirmNew,
+  });
+  const mapped = writeError(error);
+  if (mapped) throw mapped;
+  return z.string().uuid().parse(data);
+}
+
+export async function reportRestaurant(
+  restaurantId: string,
+  reason: RestaurantReportReason,
+): Promise<void> {
+  const parsedReason = restaurantReportReasonSchema.parse(reason);
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("report_restaurant", {
+    p_restaurant_id: restaurantId,
+    p_reason: parsedReason,
+  });
+  const mapped = writeError(error);
+  if (mapped) throw mapped;
+  if (data !== true) throw new RestaurantWriteError("Report not recorded", null, null);
 }
 
 export async function searchRestaurants(

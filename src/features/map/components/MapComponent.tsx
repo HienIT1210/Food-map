@@ -15,6 +15,7 @@ import {
 } from "../map-utils";
 import { useFormatter, useTranslations } from "next-intl";
 import { RestaurantSearch } from "@/features/restaurants/components/RestaurantSearch";
+import { AddRestaurantFlow } from "@/features/restaurants/components/AddRestaurantFlow";
 import type { RestaurantSearchResult } from "@/features/restaurants/types";
 
 if (typeof window !== "undefined") {
@@ -108,6 +109,7 @@ export function MapComponent() {
   });
   const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   
   // Dữ liệu GeoJSON
   const geojsonSource = useMemo(() => {
@@ -292,7 +294,16 @@ export function MapComponent() {
           <option value="">{t("filters.province")}</option>
           {provinces.map((province) => <option key={province} value={province}>{province}</option>)}
         </select>
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="min-h-10 shrink-0 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-md"
+        >
+          + {t("addRestaurant")}
+        </button>
       </div>
+
+      {addOpen && <AddRestaurantFlow onClose={() => setAddOpen(false)} />}
 
       <Map
         ref={mapRef}

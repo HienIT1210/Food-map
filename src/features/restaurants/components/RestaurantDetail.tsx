@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { getRestaurantDetails, getRestaurantDishes } from "../repository";
 import type { RestaurantDetails, RestaurantDish } from "../types";
 import { ReviewList } from "@/features/reviews/components/ReviewList";
+import { RestaurantReport } from "./RestaurantReport";
 
 function directionsUrl(lat: number, lng: number): string {
   return "https://www.google.com/maps/dir/?api=1&destination=" + lat + "," + lng;
@@ -90,7 +91,13 @@ export function RestaurantDetail({ restaurantId }: { restaurantId: string }) {
           <button type="button" onClick={retry} className="mt-2 font-semibold underline">{t("retry")}</button>
         </div>
       )}
-      {!loading && !error && !restaurant && <p className="py-16 text-center text-sm text-zinc-600">{t("notFound")}</p>}
+      {!loading && !error && !restaurant && (
+        <div className="mt-6 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+          <p className="py-6 text-center text-sm text-zinc-600">{t("notFound")}</p>
+          {/* RES-04 is still useful for a venue that was hidden after enough reports. */}
+          <RestaurantReport restaurantId={restaurantId} />
+        </div>
+      )}
       {!loading && !error && restaurant && (
         <>
           <header className="mt-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -139,6 +146,7 @@ export function RestaurantDetail({ restaurantId }: { restaurantId: string }) {
           </section>
 
           <ReviewList restaurantId={restaurant.id} dishes={dishes} />
+          <RestaurantReport restaurantId={restaurant.id} />
         </>
       )}
     </main>

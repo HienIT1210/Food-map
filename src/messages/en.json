@@ -85,7 +85,48 @@
     "distanceKilometers": "{distance} km",
     "myLocation": "My Location",
     "reviews": "reviews",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
+    "addRestaurant": "Add place"
+  },
+  "addRestaurant": {
+    "pinTitle": "Pin the place",
+    "formTitle": "Place details",
+    "duplicateTitle": "Possible duplicate",
+    "pinHint": "Drag the map so the pin sits on the place.",
+    "pinCoordinates": "Pinned at {lat}, {lng}",
+    "placeHere": "Use this location",
+    "fields": {
+      "name": "Place name",
+      "address": "Address (typed by hand)",
+      "province": "Province / city"
+    },
+    "dishLater": "You can add dishes and prices after the place exists.",
+    "checking": "Checking for similar places…",
+    "checkFailed": "Could not check for duplicates. You can still submit; the server checks again.",
+    "noSimilar": "No similar place found.",
+    "similarFound": "{count} similar place(s) within ~50 m.",
+    "duplicateNotice": "A similar place already exists very close by. If it is the same place, open it. If it is a different one, confirm below.",
+    "viewThis": "View this place",
+    "confirmDifferent": "This is a different place, add anyway",
+    "distanceMeters": "{distance} m away",
+    "noAddress": "No address listed",
+    "submit": "Submit place",
+    "saving": "Submitting…",
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "created": "Place added.",
+    "viewCreated": "View the new place",
+    "backToMap": "Back to map",
+    "missingStyleUrl": "NEXT_PUBLIC_MAP_STYLE_URL is missing, so the map pin cannot be placed.",
+    "errors": {
+      "nameRequired": "Enter a place name.",
+      "invalidInput": "The details are not valid. Check the name and pinned location.",
+      "missingPin": "No pinned location yet. Go back to the pin step.",
+      "duplicate": "The server found a duplicate within ~50 m.",
+      "quota": "You reached the daily limit for new places.",
+      "save": "Could not add the place. Check your sign-in and the daily limit, then try again."
+    }
   },
   "search": {
     "label": "Search restaurants, dishes, or addresses",
@@ -161,6 +202,26 @@
         "loadError": "Could not load your review.",
         "saveError": "Could not save the review. Check sign-in, limits, or photos and try again.",
         "deleteError": "Could not delete the review. Please try again."
+      }
+    },
+    "report": {
+      "title": "Report this place",
+      "description": "Tell us what is wrong with this place. When enough people report it, the place is hidden until moderation reviews it.",
+      "open": "Report this place",
+      "reasonLabel": "Reason",
+      "reasons": {
+        "closed": "Permanently closed",
+        "wrong_location": "Wrong location",
+        "wrong_info": "Wrong information"
+      },
+      "send": "Send report",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "done": "Your report was recorded. Thank you!",
+      "errors": {
+        "reasonRequired": "Choose a reason.",
+        "notAllowed": "This place cannot be reported (you may have created it, or your account is blocked).",
+        "save": "Could not send the report. Please try again."
       }
     }
   },

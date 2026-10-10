@@ -85,7 +85,48 @@
     "distanceKilometers": "{distance} km",
     "myLocation": "Vị trí của tôi",
     "reviews": "đánh giá",
-    "viewDetails": "Xem chi tiết"
+    "viewDetails": "Xem chi tiết",
+    "addRestaurant": "Thêm quán"
+  },
+  "addRestaurant": {
+    "pinTitle": "Ghim vị trí quán",
+    "formTitle": "Thông tin quán",
+    "duplicateTitle": "Có thể trùng quán",
+    "pinHint": "Kéo bản đồ để đặt ghim vào đúng vị trí quán.",
+    "pinCoordinates": "Vị trí ghim: {lat}, {lng}",
+    "placeHere": "Đặt vị trí này",
+    "fields": {
+      "name": "Tên quán",
+      "address": "Địa chỉ (tự nhập)",
+      "province": "Tỉnh/thành"
+    },
+    "dishLater": "Bạn có thể bổ sung món và giá sau khi quán được tạo.",
+    "checking": "Đang kiểm tra quán trùng…",
+    "checkFailed": "Chưa kiểm tra được quán trùng. Bạn vẫn có thể gửi, máy chủ sẽ kiểm tra lại.",
+    "noSimilar": "Không thấy quán nào gần giống.",
+    "similarFound": "Có {count} quán gần giống trong bán kính ~50 m.",
+    "duplicateNotice": "Đã có quán tương tự ở rất gần. Nếu đúng là quán này, hãy xem quán đó. Nếu là quán khác, hãy xác nhận bên dưới.",
+    "viewThis": "Xem quán này",
+    "confirmDifferent": "Đây là quán khác, vẫn thêm",
+    "distanceMeters": "Cách {distance} m",
+    "noAddress": "Chưa có địa chỉ",
+    "submit": "Gửi quán mới",
+    "saving": "Đang gửi…",
+    "back": "Quay lại",
+    "cancel": "Huỷ",
+    "close": "Đóng",
+    "created": "Đã thêm quán mới.",
+    "viewCreated": "Xem quán vừa thêm",
+    "backToMap": "Về bản đồ",
+    "missingStyleUrl": "Thiếu biến môi trường NEXT_PUBLIC_MAP_STYLE_URL nên không đặt được ghim.",
+    "errors": {
+      "nameRequired": "Vui lòng nhập tên quán.",
+      "invalidInput": "Thông tin chưa hợp lệ. Kiểm tra tên và tọa độ ghim.",
+      "missingPin": "Chưa có vị trí ghim. Hãy quay lại bước ghim.",
+      "duplicate": "Máy chủ phát hiện quán trùng trong ~50 m.",
+      "quota": "Bạn đã đạt giới hạn số quán thêm mới trong ngày.",
+      "save": "Không thêm được quán. Kiểm tra đăng nhập và giới hạn rồi thử lại."
+    }
   },
   "search": {
     "label": "Tìm quán, món hoặc địa chỉ",
@@ -116,8 +157,7 @@
     "menuEmpty": "Quán chưa có thông tin món ăn.",
     "priceMissing": "Chưa có giá",
     "reviews": {
-      "title": "Đánh giá",
-      "sortLabel": "Sắp xếp đánh giá",
+      "title": "Đánh giá",      "sortLabel": "Sắp xếp đánh giá",
       "sort": {
         "newest": "Mới nhất",
         "helpful": "Hữu ích nhất",
@@ -161,6 +201,26 @@
         "loadError": "Không tải được review của bạn.",
         "saveError": "Không lưu được review. Kiểm tra đăng nhập, giới hạn hoặc ảnh rồi thử lại.",
         "deleteError": "Không xóa được review. Vui lòng thử lại."
+      }
+    },
+    "report": {
+      "title": "Báo cáo quán",
+      "description": "Cho chúng tôi biết quán này có vấn đề gì. Nhiều người cùng báo cáo thì quán sẽ tạm ẩn để chờ kiểm duyệt.",
+      "open": "Báo cáo quán này",
+      "reasonLabel": "Lý do",
+      "reasons": {
+        "closed": "Quán đã đóng cửa",
+        "wrong_location": "Sai vị trí",
+        "wrong_info": "Sai thông tin"
+      },
+      "send": "Gửi báo cáo",
+      "sending": "Đang gửi…",
+      "cancel": "Huỷ",
+      "done": "Đã ghi nhận báo cáo của bạn. Cảm ơn bạn!",
+      "errors": {
+        "reasonRequired": "Vui lòng chọn một lý do.",
+        "notAllowed": "Không thể báo cáo quán này (có thể bạn là người tạo quán hoặc tài khoản đang bị khoá).",
+        "save": "Không gửi được báo cáo. Vui lòng thử lại."
       }
     }
   },
