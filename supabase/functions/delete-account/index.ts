@@ -59,9 +59,31 @@ serve(async (req) => {
 
     const userId = user.id;
 
-    // Theo SPEC AUTH-04:
-    // Mặc định: xóa toàn bộ review, ảnh và dữ liệu cá nhân của người đó (do ON DELETE CASCADE từ auth.users -> profiles -> reviews).
-    // Ta cũng có thể chủ động dọn dẹp các ảnh nếu lưu trên Supabase Storage trước khi xóa user.
+    // SPEC AUTH-04: deleting the user cascades auth.users -> profiles -> reviews -> review_photos,
+    // but a table cascade never removes Supabase Storage objects. Collect the paths first, then
+    // delete the files before the metadata rows disappear.
+    const { data: photoRows, error: photoError } = await supabaseAdmin
+      .from("review_photos")
+      .select("storage_path, reviews!inner(user_id)")
+      .eq("reviews.user_id", userId);
+
+    if (photoError) {
+      console.error("delete-account: could not list review photos", photoError.message);
+    }
+
+    const photoPaths = (photoRows ?? [])
+      .map((row) => (row as { storage_path: string | null }).storage_path)
+      .filter((path): path is string => typeof path === "string" && path.length > 0);
+
+    for (let start = 0; start < photoPaths.length; start += 100) {
+      const batch = photoPaths.slice(start, start + 100);
+      const { error: removeError } = await supabaseAdmin.storage.from("review-photos").remove(batch);
+      if (removeError) {
+        // Keep going: an orphaned file is preferable to keeping the account alive, but it must be visible.
+        console.error("delete-account: could not remove review photos", removeError.message);
+      }
+    }
+
     // Thực hiện xóa user qua Admin Auth API:
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
