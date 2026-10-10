@@ -197,16 +197,9 @@ with check (
   bucket_id = 'review-photos'
   and exists (select 1 from public.reviews r where r.id::text = (storage.foldername(name))[1] and r.user_id = auth.uid())
 );
+-- Review photos are write-once: publishing and deleting cover the product flow, so no UPDATE
+-- policy is granted (the previous policy only widened the attack surface).
 drop policy if exists "Owners update review photos" on storage.objects;
-create policy "Owners update review photos" on storage.objects for update to authenticated
-using (
-  bucket_id = 'review-photos'
-  and exists (select 1 from public.reviews r where r.id::text = (storage.foldername(name))[1] and r.user_id = auth.uid())
-)
-with check (
-  bucket_id = 'review-photos'
-  and exists (select 1 from public.reviews r where r.id::text = (storage.foldername(name))[1] and r.user_id = auth.uid())
-);
 drop policy if exists "Owners delete review photos" on storage.objects;
 create policy "Owners delete review photos" on storage.objects for delete to authenticated
 using (
@@ -298,6 +291,20 @@ begin
   return new;
 end;
 $$;
+
+-- The M5 implementation replaced the body above, so re-assert the trigger wiring: without it
+-- status and helpful_count would keep whatever a privileged write supplied.
+drop trigger if exists trg_enforce_review_system_fields on public.reviews;
+create trigger trg_enforce_review_system_fields
+before insert or update on public.reviews
+for each row execute function public.enforce_review_system_fields();
+
+-- Bound the stored path so an authenticated caller cannot persist an unbounded blob name.
+alter table public.review_photos
+  drop constraint if exists review_photos_storage_path_length;
+alter table public.review_photos
+  add constraint review_photos_storage_path_length
+  check (char_length(storage_path) between 1 and 300);
 
 -- Add only storage paths to the public view; ownership identifiers remain excluded.
 create or replace view public.public_reviews with (security_invoker = off) as
