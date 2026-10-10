@@ -2,6 +2,50 @@
 
 This document records the M1 RLS hardening tests and the deliberate mutation checks run against GitHub Actions. Mutation PRs were closed without merging; the intended implementation is in PR #2.
 
+## M6 — restaurant creation, duplicate guard and reports
+
+Three files carry the M6 rules: `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(52)`, labels `M6-01…M6-52`), plus the reworked restaurant blocks in `01_rls_test.sql` (`plan(50)`) and `05_security_privileges_test.sql` (`plan(25)`). Every count is produced by a parser that walks balanced parentheses, not by hand.
+
+### What the first two CI attempts proved
+
+| Failure | Cause | Fix |
+|---|---|---|
+| Migration raised 42601 at `supabase start` | `REVOKE ... ON COLUMN` does not exist in PostgreSQL; and revoking one column while the table grant survives does nothing anyway | Drop the table-level grant, then `GRANT SELECT (explicit columns)` without `created_by`; `REVOKE` must also name `PUBLIC` for functions, because `CREATE FUNCTION` grants EXECUTE to PUBLIC |
+| `01` died at 12/43 with `permission denied for table restaurants` | The "Quán D" quota fixture inserted restaurants directly as `authenticated`, and eight review/report tests in `05` read `public.restaurants` in a subquery as an API role | Fixtures create restaurants through `create_restaurant` (distinct names, >50 m apart, `p_confirm_new` left false so only the quota can refuse) and through fixed ids that no API role needs to read; every direct write is now `throws_ok(...,'42501')` plus a privileged read-back |
+| `10` M6-21 compared a message with `duplicate_restaurant` | `throws_ok`'s third argument is a message pattern, but `duplicate_restaurant` is the **hint** | Errors are captured with `GET STACKED DIAGNOSTICS` and asserted on the hint; the client matches the same stable field |
+| `10` M6-23 "no exception" | The case assumed a specific number of prior fixtures instead of the documented limit | The quota case now creates `limit` restaurants through the RPC and expects the next call to fail with `hint = restaurant_daily_limit` |
+| Column-privilege diagnostic printed "(none)" | `information_schema.column_privileges` only shows rows the current role can see | The sweep runs as `postgres` and iterates `pg_attribute` × `has_column_privilege()` for `anon` and `authenticated` |
+
+### Rule → assertion map (file `10`)
+
+| Assertion | Rule under test |
+|---|---|
+| M6-01/02/03 | `authenticated` cannot INSERT/UPDATE `restaurants` or INSERT `restaurant_dishes` directly (42501) |
+| M6-04 | The denied insert created no row (privileged read-back) |
+| M6-05/06/07 | `anon` cannot execute `create_restaurant`, `report_restaurant`, `check_duplicate_restaurant` |
+| M6-08/09/10/11/12 | Duplicate lookup: near same name found, distance inside 50 m, same name >50 m not a duplicate, accents/case ignored, different name not a duplicate |
+| M6-13 | `authenticated` has no SELECT on `restaurants.created_by` |
+| M6-14/15 | Create succeeds; `source='user'`, `status='active'`, `created_by = auth.uid()` |
+| M6-16/17/18 | Dish list accepted; spoofed `created_by`/`status`/`source`/`avg_rating` inside `p_dishes` ignored; dish price linked |
+| M6-19 | Out-of-range coordinates refused |
+| M6-20/21 | Unconfirmed duplicate refused, identified by `hint = duplicate_restaurant` (captured through `GET STACKED DIAGNOSTICS`) |
+| M6-22 | `p_confirm_new = true` creates the place |
+| M6-23/24/25 | Fourth and fifth places of the day allowed; the sixth refused with `hint = restaurant_daily_limit` |
+| M6-26…M6-29 | Report guards: no self-report, invalid reason refused, banned account cannot create or report |
+| M6-30/31/32 | Report stored once per reporter; below threshold the status equals the pre-report snapshot |
+| M6-33/34 | A repeat report is refused (23505) and leaves the place `active` |
+| M6-35…M6-38 | Three distinct verified reporters hide the place; status differs from the snapshot |
+| M6-39/40/41/42 | Control that an active place is visible; hidden place leaves bounds and search; reports of others are unreadable |
+| M6-43/44 | `anon` keeps safe columns but not `created_by` |
+| M6-45/46 | No table-level SELECT for either API role; public columns still readable |
+| M6-47/48 | `pg_attribute` sweep (run as `postgres`): every column except `created_by` is granted to `anon` and to `authenticated` |
+| M6-49/50 | Behavioural: `select created_by` as `anon` and as `authenticated` raises 42501 |
+| M6-51/52 | `find_duplicate_restaurants` is callable by `authenticated` but not by `anon` (PUBLIC revoked) |
+
+**How M6-47/48 would catch a regression:**
+- *Missing grant on a new column*: add a column to `restaurants` in a later migration without granting it. The sweep counts columns where `attname <> 'created_by' and not has_column_privilege(role, ..., 'SELECT')`, so that column makes the count non-zero and the assertion fails. The `diag()` line prints `name: anon=false authenticated=false` for it.
+- *An extra grant on `created_by`*: run `grant select (created_by) on public.restaurants to anon` by hand. M6-13/M6-49/M6-50 then fail (`has_column_privilege` returns true and the behavioural select returns rows instead of 42501). No mutation PR is needed: both checks are direct reads of the live catalog.
+
 ## M6 — restaurant creation, duplicate guard and reports (`supabase/tests/10_m6_restaurant_creation_test.sql`, `plan(49)`)
 
 Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are sequential `M6-01 … M6-49`; the count is produced by a parser that walks balanced parentheses, not by hand.
