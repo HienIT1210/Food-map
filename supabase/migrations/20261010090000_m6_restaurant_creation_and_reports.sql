@@ -319,3 +319,49 @@ drop trigger if exists trg_enforce_restaurant_report_threshold on public.reports
 create trigger trg_enforce_restaurant_report_threshold
 after insert on public.reports
 for each row execute function public.enforce_restaurant_report_threshold();
+
+-- ---------------------------------------------------------------------------
+-- 5. Keep the M3 restaurant-quota trigger in step with the RPC: it now reads the same
+--    app.restaurant_daily_limit setting (default 5) instead of a hard-coded 5, so a transaction
+--    that lowers the setting sees the same limit on every write path.
+-- ---------------------------------------------------------------------------
+create or replace function public.check_restaurant_limits()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  daily_count int;
+  daily_limit integer := coalesce(
+    nullif(current_setting('app.restaurant_daily_limit', true), '')::integer,
+    5
+  );
+begin
+  new.created_at := now();
+  new.status := 'active';
+  new.avg_rating := 0;
+  new.review_count := 0;
+
+  if auth.uid() is null then
+    new.source := 'seed';
+    return new;
+  end if;
+
+  new.created_by := auth.uid();
+  new.source := 'user';
+
+  perform pg_advisory_xact_lock(hashtextextended('create_restaurant:' || auth.uid()::text, 0));
+
+  select count(*) into daily_count
+  from public.restaurants
+  where created_by = auth.uid()
+    and created_at >= now() - interval '1 day';
+
+  if daily_count >= daily_limit then
+    raise exception 'Đã vượt quá giới hạn tạo % địa điểm mỗi ngày.', daily_limit
+      using errcode = 'P0001', hint = 'restaurant_daily_limit';
+  end if;
+  return new;
+end;
+$$;
