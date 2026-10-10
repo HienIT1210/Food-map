@@ -28,7 +28,7 @@ export function RestaurantReport({ restaurantId }: { restaurantId: string }) {
         // 23505 is the reports unique key: this account already reported this restaurant.
         if (caught.code === "23505") setDone(true);
         else if (caught.code === "42501") setError(t("errors.notAllowed"));
-        else setError(caught.message);
+        else setError(t("errors.save"));
       } else {
         setError(t("errors.save"));
       }

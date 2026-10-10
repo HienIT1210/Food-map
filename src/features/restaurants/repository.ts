@@ -30,15 +30,22 @@ export class RestaurantWriteError extends Error {
     message: string,
     public readonly code: string | null,
     public readonly hint: string | null,
+    public readonly detail: string | null,
   ) {
     super(message);
     this.name = "RestaurantWriteError";
   }
 }
 
-function writeError(error: { message: string; code?: string | null; hint?: string | null } | null): Error | null {
+/** Stable identifiers the database raises with, so the UI never matches on message text. */
+export const RESTAURANT_ERROR_HINTS = {
+  duplicate: "duplicate_restaurant",
+  dailyLimit: "restaurant_daily_limit",
+} as const;
+
+function writeError(error: { message: string; code?: string | null; hint?: string | null; details?: string | null } | null): Error | null {
   if (!error) return null;
-  return new RestaurantWriteError(error.message, error.code ?? null, error.hint ?? null);
+  return new RestaurantWriteError(error.message, error.code ?? null, error.hint ?? null, error.details ?? null);
 }
 
 export async function checkDuplicateRestaurant(
@@ -86,7 +93,7 @@ export async function reportRestaurant(
   });
   const mapped = writeError(error);
   if (mapped) throw mapped;
-  if (data !== true) throw new RestaurantWriteError("Report not recorded", null, null);
+  if (data !== true) throw new RestaurantWriteError("Report not recorded", null, null, null);
 }
 
 export async function searchRestaurants(

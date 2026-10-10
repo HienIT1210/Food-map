@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { createRestaurant, RestaurantWriteError } from "../repository";
+import { createRestaurant, RestaurantWriteError, RESTAURANT_ERROR_HINTS } from "../repository";
 import { createRestaurantInputSchema, type CreateRestaurantInput } from "../types";
 import { useDuplicateCheck } from "../hooks/useDuplicateCheck";
 
@@ -80,12 +80,14 @@ export function AddRestaurantFlow({ onClose }: { onClose: () => void }) {
       setCreatedId(await createRestaurant(input));
     } catch (caught: unknown) {
       if (caught instanceof RestaurantWriteError) {
-        // The server re-checked the duplicate rule even though the client skipped the step.
-        if (caught.hint === "duplicate_restaurant") {
+        // Only the stable hint is matched; the message text is server-owned and may be reworded.
+        if (caught.hint === RESTAURANT_ERROR_HINTS.duplicate) {
           setStep("duplicate");
           setSubmitError(t("errors.duplicate"));
+        } else if (caught.hint === RESTAURANT_ERROR_HINTS.dailyLimit) {
+          setSubmitError(t("errors.quota"));
         } else {
-          setSubmitError(caught.message);
+          setSubmitError(t("errors.save"));
         }
       } else {
         setSubmitError(t("errors.save"));
