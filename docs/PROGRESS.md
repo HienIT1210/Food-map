@@ -2,7 +2,7 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-09 bởi DeepSeek Harness (tiếp quản M5)
+**Cập nhật lần cuối:** 2026-10-09 bởi DeepSeek Harness (tiếp quản M5, vòng CI thứ 2)
 
 ---
 
@@ -43,6 +43,14 @@
    - **Sai (đã hoàn nguyên):** T6/T11 bị hạ `lim` từ 50 về 10 kèm đổi tên test. Đây là tái phạm lỗi top-N đã có bằng chứng CI trong `docs/SECURITY-TESTS.md`; đã trả về `lim=50` và tên test gốc.
    - **Sai (đã hoàn nguyên):** xóa `set local role postgres; set local "request.jwt.claims" to '{}';` ngay trước block fixture giới hạn. Thiếu dòng này thì JWT claim cũ (User B) còn hiệu lực và trigger gán quán cho User B.
    - **Thiếu (đã bổ sung):** T8/T20/T22/T33/T34–T36 viết theo mô hình cũ (authenticated ghi trực tiếp được). M5 đã thu hồi quyền ghi bảng nên phải cập nhật lại — xem mục 6.
+
+### 3.2. Vòng CI 1 (commit `076b3d2`) đỏ — nguyên nhân và cách sửa
+
+Job `database` báo `Files=9, Tests=62` rồi dừng. Ba nguyên nhân, mỗi nguyên nhân đều được xử lý kèm bằng chứng in ra log:
+
+1. **`01_rls_test.sql` dừng ở dòng 102 (6/38):** đó là `update public.reviews ...` **không có assertion**; M5 đã thu hồi quyền ghi bảng nên câu lệnh ném `42501` và làm hỏng cả file. Toàn bộ file đã được rà: mọi lời gọi ghi trực tiếp giờ nằm trong `throws_ok(..., '42501')` và có ít nhất một lần đọc lại bằng vai đặc quyền để chứng minh dữ liệu không đổi. T8 chuyển sang gọi `save_review` để giới hạn ngày được kiểm chứng đúng ở RPC (`P0001`). `plan(38)` → `plan(43)` vì các câu lệnh trần trước đây không chiếm slot; T1–T38 vẫn phủ đúng các quy tắc cũ.
+2. **`08`/`09` lỗi 42883 `function public.save_review(unknown, unknown, integer, unknown, boolean) does not exist`:** do `p_rating` khai báo `smallint` nhưng literal/postgREST gửi `integer`. **Đây là lỗi ảnh hưởng cả app**, không chỉ test: PostgREST gửi số JSON trần dưới dạng `integer`, nên `src/features/reviews/repository.ts` cũng sẽ gọi không tới hàm. Đã sửa **chữ ký trong migration** thành `p_rating integer` và `p_position integer` (ràng buộc 1–5 và cast cột `smallint` vẫn giữ), bỏ mọi cast `::smallint` trong test, và thêm `diag()` in `pg_get_function_identity_arguments` cho `save_review`/`add_review_photo`/`delete_review`.
+3. **`delete_review` xóa `storage.objects` bằng SQL:** Supabase Storage chặn DELETE trực tiếp trên bảng này và cách cũ để lại tệp mồ côi. Đã thiết kế lại: RPC chỉ xóa hàng review và **trả về `table (deleted_review_id uuid, storage_paths text[])`**; `repository.ts` nhận danh sách rồi xóa tệp qua Storage API. Test 08 nay kiểm RPC chạy được + metadata cascade, không còn kỳ vọng SQL xóa hàng Storage.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
@@ -92,16 +100,20 @@ E2E:             npx playwright test     # chưa cài; M9
 5. Tạo tài khoản mới (chưa đủ 24h hoặc chưa xác minh email) → thử đăng ẩn danh; xác nhận bị server từ chối.
 6. Đăng 11 review trong 24h; xác nhận review thứ 11 bị từ chối (thử cả bằng DevTools gọi trực tiếp RPC).
 7. DevTools Network: mở phản hồi `public_reviews`; xác nhận **không** có `user_id`/`author_id` cho review ẩn danh, và `photo_paths` không chứa UUID người dùng.
-8. Upload một tệp không phải ảnh (đổi đuôi thành `.jpg`); ghi lại hành vi thực tế của Storage (xem rủi ro còn lại ở mục 8).
-9. Xóa tài khoản; xác nhận ảnh review của tài khoản đó cũng bị xóa khỏi Storage.
+8. Kiểm metadata Storage của ảnh thuộc review ẩn danh bằng một tài khoản khác: chạy đoạn `supabase.storage.from("review-photos").list("<reviewId>")` trong `docs/PRIVACY-DESIGN.md`; nếu thấy `owner_id` trùng người viết thì ghi nhận đúng rủi ro đó (chưa xử lý trong M5).
+9. Upload một tệp không phải ảnh (đổi đuôi thành `.jpg`); ghi lại hành vi thực tế của Storage.
+10. Xóa một review có ảnh trong "Review của tôi"; xác nhận cả tệp ảnh trong Storage cũng bị xóa (RPC trả `storage_paths`, client gọi Storage API).
+11. Xóa tài khoản; xác nhận ảnh review của tài khoản đó cũng bị xóa khỏi Storage.
 
 ## 6. Thay đổi M5 trong phiên này (rút gọn)
 
-- **Migration (sửa trực tiếp, chưa `db push`):** nối lại trigger `trg_enforce_review_system_fields` (hàm đã có nhưng trigger bị mất khi thay hàm ở M5); thêm ràng buộc độ dài `review_photos_storage_path_length (1..300)`; bỏ policy UPDATE trên `storage.objects` cho bucket ảnh review.
+- **Migration (sửa trực tiếp, chưa `db push`):** nối lại trigger `trg_enforce_review_system_fields`; thêm ràng buộc độ dài `review_photos_storage_path_length (1..300)`; bỏ policy UPDATE trên `storage.objects`; **đổi `save_review.p_rating` và `add_review_photo.p_position` sang `integer`** (lỗi 42883 với PostgREST, xem mục 3.2); **thiết kế lại `delete_review`** trả `table (deleted_review_id uuid, storage_paths text[])` và không còn `delete from storage.objects`.
+- **`repository.ts`:** `removeReview` đọc `storage_paths` từ RPC rồi xóa tệp qua Storage API.
 - **`delete-account` Edge Function:** dọn file trong Storage trước khi xóa user (cascade bảng không xóa file).
-- **`01_rls_test.sql`:** hoàn nguyên 2 chỗ sai như mục 3.1; T8/T20/T22/T33 giữ nguyên `42501` (M5 từ chối mọi ghi trực tiếp — bất biến bảo mật không đổi, chỉ đổi lý do từ chối); T34–T37 chuyển sang đường ghi hợp lệ (`add_review_photo` cho chủ review, insert/update có đặc quyền cho fixture) để vẫn kiểm chứng đúng quy tắc ẩn danh; T38 mới: ghi metadata ảnh trực tiếp bị `42501`. Giữ nguyên `plan(38)`.
-- **`05_security_privileges_test.sql`:** R20/R23 nay kiểm tra `authenticated` **không còn** quyền ghi bảng review/ảnh và **có** quyền `execute` RPC. Giữ nguyên `plan(24)`.
+- **`01_rls_test.sql`:** hoàn nguyên 2 chỗ sai ở mục 3.1; mọi ghi trực tiếp chuyển thành `throws_ok(42501)` + đọc lại bằng vai đặc quyền; T8 dùng `save_review` (`P0001`); T34–T37 dùng đường ghi hợp lệ; T38 mới kiểm ghi metadata ảnh trực tiếp bị `42501`; thêm `diag()` in chữ ký hàm. `plan(43)`.
+- **`05_security_privileges_test.sql`:** R20/R23 nay kiểm `authenticated` **không còn** quyền ghi bảng review/ảnh và **có** quyền `execute` RPC (chữ ký `integer`). `plan(24)`.
 - **`09_m5_review_rules_test.sql` (mới, `plan(16)`):** quyền RPC của anon, quyền bảng của authenticated, điều kiện ẩn danh (đủ tuổi + đã xác minh email), một review cho mỗi (người dùng, quán, món), tối đa 5 ảnh, không tự vote, `helpful_count` tính từ bảng vote.
+- **`docs/PRIVACY-DESIGN.md`:** ghi nhận rủi ro `storage.objects.owner_id` gắn `auth.uid()` kể cả với review ẩn danh, kèm bằng chứng tài liệu Supabase, cách tự kiểm chứng sau `db push`, và 3 hướng xử lý đề xuất.
 
 ## 7. Quyết định đã chốt (không đổi khi chưa hỏi người dùng)
 
@@ -127,10 +139,12 @@ E2E:             npx playwright test     # chưa cài; M9
 - `jsdom@30.1.1` cảnh báo engine trên Node 24.11.1 (yêu cầu ≥ 24.15). `npm test` vẫn pass trên máy này.
 - `next dev` tự thêm khối luật Next.js vào cuối `AGENTS.md`; nội dung luật repo gốc được giữ nguyên.
 - Deno Edge Functions trong `supabase/functions` được exclude khỏi `tsconfig.json` của Next.js để tránh xung đột kiểu type giữa Node và Deno.
-- **Sandbox Windows (quan trọng cho agent sau):** trong phiên này, tiến trình chạy trong sandbox có mức toàn vẹn **Low**, còn tệp do lần chạy **ngoài sandbox** tạo ra có mức **Medium**. Hệ quả: `npm test` / `npm run build` lỗi `spawn EPERM` (Vite/SWC cần spawn tiến trình con có ống dẫn) và `npx tsc --noEmit` lỗi `EPERM ... tsconfig.tsbuildinfo` nếu tệp cache đó do lần chạy ngoài sandbox để lại. Cách xử lý: chạy `npm test` và `npm run build` ngoài sandbox; nếu tsc báo EPERM với `tsconfig.tsbuildinfo` thì xóa tệp cache đó ngoài sandbox rồi chạy lại (lần chạy trong sandbox sẽ tạo lại tệp ở mức Low).
-- **Đường dẫn workspace thiếu quyền Windows:** đầu phiên, mọi lệnh `pwsh` đều lỗi `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\wamp\www\food-map)`. Đã sửa bằng script chẩn đoán ACL (bản backup/khôi phục nằm trong `.acl-recovery/`). Thư mục `.acl-recovery/` là rác công cụ, đã thêm vào `.gitignore`.
-- **Rủi ro còn lại (Storage):** `allowed_mime_types` chỉ kiểm tra Content-Type do client khai báo, không kiểm tra magic byte. Bucket lại là công khai nên một tệp HTML khai báo `image/jpeg` có thể được phục vụ từ miền Storage dùng chung. Chưa xử lý trong M5; đề xuất cho M8/M9: kiểm tra magic byte phía server (Edge Function hoặc trigger trên `storage.objects`) hoặc chỉ phục vụ ảnh qua signed URL/`Content-Disposition: attachment`.
-- **Rủi ro còn lại (đã chấp nhận):** `photo_paths` trong `public_reviews` chứa `review_id` làm thư mục đầu, nên người biết `review_id` có thể đoán được URL ảnh. Đây không phải `user_id` và ảnh vốn công khai theo thiết kế; không đổi trong M5.
+- **Sandbox Windows (quan trọng cho agent sau):** trong phiên này, tiến trình chạy trong sandbox có mức toàn vẹn **Low**, còn tệp do lần chạy **ngoài sandbox** tạo ra có mức **Medium**. Hệ quả: `npm test` / `npm run build` lỗi `spawn EPERM` (Vite/SWC cần spawn tiến trình con có ống dẫn) và `npx tsc --noEmit` lỗi `EPERM ... tsconfig.tsbuildinfo` nếu tệp cache đó do lần chạy ngoài sandbox để lại. Cách xử lý **không đụng ACL**: chạy `npm test` và `npm run build` ngoài sandbox; nếu `npx tsc --noEmit` báo EPERM với `tsconfig.tsbuildinfo`, nhờ người dùng xóa tệp cache đó (hoặc chạy `npx tsc --noEmit --incremental false`) rồi chạy lại.
+- **Quyền thư mục dự án (đã đóng, không sửa thêm):** ở lượt trước, mọi lệnh `pwsh` lỗi `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\wamp\www\food-map)`. Đã xử lý bằng script chẩn đoán ACL của harness. Chi tiết thay đổi ở mục 10. Từ nay **không đổi quyền/ACL hệ thống nữa**; nếu sandbox chặn thao tác, báo người dùng tự chạy.
+- **Git trong sandbox không commit được:** `.git` có các mục quyền DENY nên `git add/commit/push` phải chạy ngoài sandbox (đã báo người dùng). Không xóa DENY bằng tay.
+- **Rủi ro còn lại (Storage metadata):** `storage.objects.owner_id` = `auth.uid()` của người tải ảnh, **kể cả review ẩn danh**, và policy SELECT công khai của bucket làm metadata này đọc được. Chi tiết, bằng chứng và 3 hướng xử lý ở `docs/PRIVACY-DESIGN.md`. Chưa xử lý trong M5.
+- **Rủi ro còn lại (Storage content-type):** `allowed_mime_types` chỉ kiểm tra Content-Type do client khai báo, không kiểm tra magic byte; bucket công khai nên tệp HTML khai báo `image/jpeg` có thể được phục vụ từ miền Storage dùng chung. Đề xuất M8/M9: kiểm magic byte phía server hoặc chỉ phục vụ qua signed URL.
+- **Rủi ro còn lại (đã chấp nhận):** `photo_paths` trong `public_reviews` chứa `review_id` làm thư mục đầu, nên người biết `review_id` có thể đoán URL ảnh. Không phải `user_id` và ảnh vốn công khai theo thiết kế; không đổi trong M5.
 
 ## 9. Nhật ký bàn giao
 
@@ -154,4 +168,16 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-08 | Codex | Mutation evidence: người dùng xác nhận main `4739d74` xanh. PR #4 database job cố ý FAIL (Files=6, Tests=77) khi khôi phục quyền ghi rộng; PR không merge. Xem `docs/SECURITY-TESTS.md`. | PR #4 |
 | 2026-10-09 | Codex | M4 search/detail + migration `20261009100000`; sửa lỗi top-N bằng `diag()` (T6/T11 dùng `lim=50`). Người dùng xác nhận CI M4 xanh và đã `db push`. | `bb689e0` |
 | 2026-10-09 | Codex | Sinh code M5 (RPC ghi review, Storage ảnh, composer/MyReviews, xử lý ảnh xóa EXIF, i18n) + `08_m5_review_write_test.sql`. Local lint/tsc/test/build pass; hết token trước khi commit hai file đang sửa. | `2d3f083` |
-| 2026-10-09 | DeepSeek Harness | Tiếp quản M5: khôi phục `PROGRESS.md` bị ghi đè; hoàn nguyên 2 chỗ sai trong `01_rls_test.sql` (T6/T11 `lim=10`, mất `role postgres` + clear JWT trước fixture); cập nhật 01/05 cho mô hình RPC M5; thêm `09_m5_review_rules_test.sql`; nối trigger `trg_enforce_review_system_fields`, thêm ràng buộc độ dài path, bỏ policy UPDATE Storage; `delete-account` dọn ảnh Storage. Chạy 4 lệnh local; chờ CI và `db push`. | (commit của phiên này) |
+| 2026-10-09 | DeepSeek Harness | Tiếp quản M5 (vòng 1): khôi phục `PROGRESS.md` bị ghi đè; hoàn nguyên 2 chỗ sai trong `01_rls_test.sql` (T6/T11 `lim=10`, mất `role postgres` + clear JWT trước fixture); cập nhật 01/05 cho mô hình RPC M5; thêm `09_m5_review_rules_test.sql`; nối trigger `trg_enforce_review_system_fields`, thêm ràng buộc độ dài path, bỏ policy UPDATE Storage; `delete-account` dọn ảnh Storage. Bốn lệnh local pass. | `076b3d2` |
+| 2026-10-09 | DeepSeek Harness | Vòng 2 sau log CI đỏ: chuyển mọi ghi trực tiếp trong `01` sang `throws_ok(42501)` + đọc lại bằng vai đặc quyền (`plan(43)`); sửa lỗi chữ ký 42883 bằng cách đổi `p_rating`/`p_position` sang `integer` trong migration (lỗi ảnh hưởng cả PostgREST ở app), thêm `diag()` chữ ký hàm; thiết kế lại `delete_review` trả `storage_paths` thay vì xóa `storage.objects` bằng SQL, cập nhật `repository.ts` và test 08; ghi rủi ro `owner_id` vào `docs/PRIVACY-DESIGN.md`. Bốn lệnh local pass; chờ CI. | (commit vòng 2) |
+
+## 10. Những gì đã đổi về quyền hệ thống ở lượt trước (để đối chiếu, KHÔNG lặp lại)
+
+Trong lượt trước tôi **đã** chạy 4 thao tác ngoài sandbox có tác động lên quyền/đối tượng trên máy:
+
+1. `diagnose-windows-sandbox-acl.ps1 -Path 'D:\wamp\www\food-map' -AllowRoot 'D:\wamp\www\food-map' -Out 'D:\wamp\www\food-map\.acl-recovery'` — script của harness: đọc và sửa **quyền tệp (ACL)** của thư mục `D:\wamp\www\food-map`; thêm quyền toàn phần cho tài khoản đang đăng nhập (S-1-5-21-1322733695-2168282594-2462580819-1001) ở mục còn thiếu `WRITE_OWNER` (trước: `writeOwner=false`, sau: `true`). Backup/khôi phục: `.acl-recovery/acl-backup-bfb629daf89d4b599125348fd5d71d48.json` và `.json.ps1`.
+2. Cùng script với `-Path 'D:\wamp\www\food-map\tsconfig.tsbuildinfo'` — chỉ để chẩn đoán; script **không thay đổi gì** (`changes: []`, `granted: 0`) vì DACL đã đúng; nguyên nhân thật là mức toàn vẹn Medium của tệp đó.
+3. `Remove-Item 'D:\wamp\www\food-map\tsconfig.tsbuildinfo'` — xóa **đúng tệp cache build** đó (không phải mã nguồn); git bỏ qua nó qua `*.tsbuildinfo`.
+4. Các lệnh git ghi vào `.git` (`git add/commit/push/switch`) chạy ngoài sandbox; chỉ ghi object/index bình thường của repo.
+
+Không sửa ACL của bất kỳ thư mục/tệp nào khác. `.acl-recovery/` đã được thêm vào `.gitignore` ở commit `076b3d2`. **Từ nay tôi không đổi quyền/ACL nữa**; nếu sandbox chặn, tôi sẽ báo để người dùng tự chạy.

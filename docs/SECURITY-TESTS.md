@@ -115,7 +115,13 @@ M5 revoked `INSERT`, `UPDATE` and `DELETE` on `public.reviews`, `public.review_p
 | `05` R20 | `authenticated` held column-level INSERT on `review_photos` | `authenticated` holds no table write on `review_photos` but holds `EXECUTE` on `add_review_photo` | Inverts the assertion to the M5 contract while keeping the same slot and the same "only these columns" intent. |
 | `05` R23 | `authenticated` held column-level INSERT on `reviews` | `authenticated` holds no table write on `reviews` but holds `EXECUTE` on `save_review` | Same as above. |
 
-`plan(38)` in `01` and `plan(24)` in `05` are unchanged; no test was deleted or commented out.
+`plan(43)` in `01` and `plan(24)` in `05`; `08` is `plan(13)` and `09` is `plan(16)`. No test was deleted or commented out.
+
+**Why `01` moved from `plan(38)` to `plan(43)` (CI run 1 evidence):** the first M5 CI run stopped at `01_rls_test.sql` line 102 with `permission denied for table reviews`. That line was a **bare** `UPDATE` (and the next line a bare `DELETE`) whose comment claimed RLS would silently match zero rows. M5 revoked the table-level write grants, so those statements now raise `42501` and, being unasserted, they aborted the whole file at 6/38. Every such write must therefore become its own `throws_ok(..., '42501')` slot, which is five assertions more than the old bare statements consumed (T5 split into `T5a`/`T5b`, plus the `T8`, `T23` and `T38` denials that used to be unasserted or asserted only through read-backs). The plan number is the only thing that changed; T1-T38 still cover the same rules. `diag()` calls print the live `save_review`, `add_review_photo` and `delete_review` signatures so a mismatch is never a bare `42883`.
+
+**Signature defect found by the same run:** `save_review(p_rating smallint)` and `add_review_photo(p_position smallint)` could not be called with a bare `5`; PostgreSQL reported `function public.save_review(unknown, unknown, integer, unknown, boolean) does not exist` (42883). PostgREST sends a bare JSON number as `integer` ([Functions as RPC](https://postgrest.org/en/stable/references/api/functions.html)), so this was an app-breaking defect, not only a test defect. The migration now declares both parameters as `integer` (the `1..5` range check and the implicit `smallint` column cast stay in place) and the tests call them without casts.
+
+**Deletion redesign:** `delete_review` no longer `delete from storage.objects`. Supabase Storage blocks direct SQL deletes on that table and the old statement left orphaned files. The RPC now deletes only the review row and returns `table (deleted_review_id uuid, storage_paths text[])`; the caller removes the files through the Storage API. `08` now asserts that the RPC succeeds and that the photo metadata rows cascade. No test expects SQL to remove a `storage.objects` row.
 
 ### New coverage
 
