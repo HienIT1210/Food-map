@@ -170,7 +170,7 @@ select extensions.ok(
   not has_table_privilege('authenticated', 'public.review_photos', 'INSERT')
   and not has_table_privilege('authenticated', 'public.review_photos', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.review_photos', 'DELETE')
-  and has_function_privilege('authenticated', 'public.add_review_photo(uuid,text,smallint)', 'EXECUTE'),
+  and has_function_privilege('authenticated', 'public.add_review_photo(uuid,text,integer)', 'EXECUTE'),
   'R20: review photo writes require the RPC, not table privileges'
 );
 select extensions.ok(
@@ -189,7 +189,7 @@ select extensions.ok(
   not has_table_privilege('authenticated', 'public.reviews', 'INSERT')
   and not has_table_privilege('authenticated', 'public.reviews', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.reviews', 'DELETE')
-  and has_function_privilege('authenticated', 'public.save_review(uuid,uuid,smallint,text,boolean)', 'EXECUTE'),
+  and has_function_privilege('authenticated', 'public.save_review(uuid,uuid,integer,text,boolean)', 'EXECUTE'),
   'R23: review writes require the RPC and expose no system-managed column grant'
 );
 select extensions.throws_ok(

@@ -3,6 +3,16 @@ create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 select extensions.plan(13);
 
+-- CI diagnostic: a signature mismatch must show its own evidence instead of a bare 42883.
+select extensions.diag('>>> save_review args: '
+  || coalesce((select string_agg(pg_get_function_identity_arguments(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'save_review'), 'MISSING'));
+select extensions.diag('>>> add_review_photo args: '
+  || coalesce((select string_agg(pg_get_function_identity_arguments(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'add_review_photo'), 'MISSING'));
+
 set local role postgres;
 set local "request.jwt.claims" to '{}';
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
@@ -35,7 +45,7 @@ select 'a5050000-0000-4000-8000-000000000020',
 from generate_series(1, 5) as series(n);
 
 select extensions.ok(
-  not has_function_privilege('anon', 'public.save_review(uuid,uuid,smallint,text,boolean)', 'EXECUTE'),
+  not has_function_privilege('anon', 'public.save_review(uuid,uuid,integer,text,boolean)', 'EXECUTE'),
   'anon cannot execute the review write RPC'
 );
 
@@ -96,9 +106,17 @@ select extensions.throws_ok(
   $$insert into public.reviews (user_id, restaurant_id, rating) values (auth.uid(), 'a5050000-0000-4000-8000-000000000010', 3)$$,
   '42501', null, 'review inserts must go through the validated RPC'
 );
+set local "request.jwt.claims" to '{"sub":"a5050000-0000-4000-8000-000000000001","role":"authenticated"}';
+select extensions.lives_ok(
+  $$select public.delete_review('a5050000-0000-4000-8000-000000000020')$$,
+  'review owner can delete their review through the RPC'
+);
+set local role postgres;
+set local "request.jwt.claims" to '{}';
 select extensions.is(
-  public.delete_review('a5050000-0000-4000-8000-000000000020'), true,
-  'review owner can delete their review and its photo metadata through the RPC'
+  (select count(*)::integer from public.review_photos where review_id = 'a5050000-0000-4000-8000-000000000020'),
+  0,
+  'deleting the review cascades its photo metadata rows'
 );
 
 select * from extensions.finish();

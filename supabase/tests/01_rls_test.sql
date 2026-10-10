@@ -4,8 +4,26 @@ create extension if not exists pgtap with schema extensions;
 -- Khung test dùng search_path gồm public và extensions để các hàm của pgTAP luôn được phân giải chính xác
 set search_path = public, extensions;
 
--- 16 existing checks plus 22 security regression checks.
-select extensions.plan(38);
+-- M5 requires every denied write to be asserted as a privilege error (42501) instead of relying on
+-- RLS silently matching zero rows, which removed the bare UPDATE/DELETE statements that used to run
+-- unasserted. Each denial therefore needs its own throws_ok slot, so the plan grew from 38 to 43
+-- while covering the same security rules. Nothing was deleted or commented out.
+select extensions.plan(43);
+
+-- CI diagnostics: print the live signatures so a test/function mismatch shows its own evidence
+-- instead of a bare 42883. These diag() calls do not consume a plan slot.
+select extensions.diag('>>> save_review args: '
+  || coalesce((select string_agg(pg_get_function_identity_arguments(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'save_review'), 'MISSING'));
+select extensions.diag('>>> add_review_photo args: '
+  || coalesce((select string_agg(pg_get_function_identity_arguments(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'add_review_photo'), 'MISSING'));
+select extensions.diag('>>> delete_review result: '
+  || coalesce((select string_agg(pg_get_function_result(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'delete_review'), 'MISSING'));
 
 -- Bật RLS và các triggers (nếu có)
 -- Tạo data nền, cần đảm bảo user tồn tại trong cả auth.users và public.profiles
@@ -98,16 +116,26 @@ alter policy "Users can view own reviews" on public.reviews using (true);
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 
--- UPDATE/DELETE bị RLS chặn sẽ không throw exception, mà trả về 0 rows affected.
-update public.reviews set content = 'Hack' where id = 'eeee5555-5555-5555-5555-555555555556';
-delete from public.reviews where id = 'eeee5555-5555-5555-5555-555555555556';
+-- M5 revoked the table-level INSERT/UPDATE/DELETE grants on public.reviews, so a direct write
+-- raises 42501 instead of silently matching zero rows through RLS. The security property is
+-- unchanged; only the layer that denies the write moved.
+select extensions.throws_ok(
+  'update public.reviews set content = ''Hack'' where id = ''eeee5555-5555-5555-5555-555555555556''',
+  '42501', null,
+  'T5a (b): User B cannot even attempt a direct UPDATE on reviews'
+);
+select extensions.throws_ok(
+  'delete from public.reviews where id = ''eeee5555-5555-5555-5555-555555555556''',
+  '42501', null,
+  'T5b (b): User B cannot even attempt a direct DELETE on reviews'
+);
 
 -- Reset về superuser để kiểm tra nội dung gốc.
 set local role postgres;
 select extensions.is(
   (select content from public.reviews where id = 'eeee5555-5555-5555-5555-555555555556'),
   'T5 original',
-  'T5 (b): User B không thể update hoặc delete review của A (nội dung gốc nguyên vẹn)'
+  'T5c (b): user A review content is intact and its row still exists'
 );
 alter policy "Users can view own reviews" on public.reviews using (auth.uid() = user_id);
 set local role postgres;
@@ -148,12 +176,12 @@ $$;
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
--- M5 revoked the table-level review INSERT grant from authenticated, so the write is denied
--- before any trigger runs. The security property is unchanged: the insert never succeeds.
+-- M5 routes every review write through save_review, so the daily cap is asserted on the RPC that
+-- the app actually calls. The 10 fixture rows above leave User D exactly at the limit.
 select extensions.throws_ok(
-  'insert into public.reviews (user_id, restaurant_id, rating, content) values (''dddd7777-7777-7777-7777-777777777777'', ''dddd4444-4444-4444-4444-444444444445'', 5, ''Over limit'')',
-  '42501', null,
-  'T8 (d): Chặn insert review trực tiếp; ghi review phải qua RPC save_review'
+  $$select public.save_review('dddd4444-4444-4444-4444-444444444445', null, 5, 'Over limit', false)$$,
+  'P0001', null,
+  'T8 (d): save_review chặn review thứ 11 trong ngày (giới hạn ép ở database)'
 );
 
 -- Test limit nhà hàng: 5 nhà hàng mỗi ngày
@@ -272,7 +300,7 @@ set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222"
 select extensions.throws_ok(
   'insert into public.reviews (user_id, restaurant_id, rating, content) values (''aaaa1111-1111-1111-1111-111111111111'', ''dddd4444-4444-4444-4444-444444444447'', 5, ''Spoofed owner'')',
   '42501', null,
-  'T20 (b): User B cannot insert a review as User A'
+  'T20 (b): User B cannot insert a review as User A (direct write denied); no row can appear'
 );
 
 set local role anon;
@@ -287,27 +315,32 @@ select extensions.throws_ok(
   '42501', null,
   'T22 (c): anon cannot insert a review'
 );
+set local role postgres;
+-- One privileged read-back per denied write rule proves the row was not created.
+select extensions.is(
+  (select count(*)::integer from public.public_reviews where restaurant_id = 'dddd4444-4444-4444-4444-444444444447'),
+  0,
+  'T22b (c): neither the spoofed nor the anon insert created a review row'
+);
 
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
-update public.restaurants
-set avg_rating = 1, review_count = 99, status = 'closed'
-where id = 'dddd4444-4444-4444-4444-444444444444';
+-- M5 removed the system-managed restaurant UPDATE grant, so the write is denied outright.
+select extensions.throws_ok(
+  'update public.restaurants set avg_rating = 1, review_count = 99, status = ''closed'' where id = ''dddd4444-4444-4444-4444-444444444444''',
+  '42501', null,
+  'T23 (d): User B is denied the system-managed restaurant UPDATE'
+);
 set local role postgres;
 select extensions.is(
-  (select avg_rating from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
-  0::numeric,
-  'T23 (d): User B cannot change avg_rating'
-);
-select extensions.is(
-  (select review_count from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
-  0,
-  'T24 (d): User B cannot change review_count'
+  (select avg_rating = 0 and review_count = 0 from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
+  true,
+  'T24 (d): avg_rating and review_count remain unchanged after the denial'
 );
 select extensions.is(
   (select status from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
   'active',
-  'T25 (d): User B cannot change restaurant status'
+  'T25 (d): restaurant status remains unchanged after the denial'
 );
 
 set local role authenticated;
@@ -329,7 +362,7 @@ set local "request.jwt.claims" to '{"sub":"cccc3333-3333-3333-3333-333333333333"
 select extensions.throws_ok(
   'insert into public.reviews (user_id, restaurant_id, rating, content) values (''cccc3333-3333-3333-3333-333333333333'', ''dddd4444-4444-4444-4444-444444444446'', 5, ''Banned review'')',
   '42501', null,
-  'T33 (f): a banned user cannot insert a review'
+  'T33 (f): a banned user cannot insert a review, so no row can appear'
 );
 
 -- M5 requires every photo write to pass through add_review_photo() as the review owner, so the
@@ -365,7 +398,7 @@ set local "request.jwt.claims" to '{"sub":"aaaa1111-1111-1111-1111-111111111111"
 select extensions.throws_ok(
   'insert into public.review_photos (id, review_id, storage_path) values (''33330000-0000-4000-8000-000000000001'', ''eeee5555-5555-5555-5555-555555555555'', ''eeee5555-5555-5555-5555-555555555555/9f1d2c34-0000-4000-8000-000000000003.webp'')',
   '42501', null,
-  'T38 (g): review photo metadata writes require the ownership-checked RPC'
+  'T38 (g): review photo metadata writes require the ownership-checked RPC, so no row can appear'
 );
 
 select * from extensions.finish(true);

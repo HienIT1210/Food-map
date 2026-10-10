@@ -5,6 +5,16 @@ create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 select extensions.plan(16);
 
+-- CI diagnostic: a signature mismatch must show its own evidence instead of a bare 42883.
+select extensions.diag('>>> save_review args: '
+  || coalesce((select string_agg(pg_get_function_identity_arguments(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'save_review'), 'MISSING'));
+select extensions.diag('>>> delete_review identity: '
+  || coalesce((select string_agg(pg_get_function_identity_arguments(p.oid) || ' -> ' || pg_get_function_result(p.oid), ' | ')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.proname = 'delete_review'), 'MISSING'));
+
 -- Fixture setup runs as database owner with cleared JWT claims: security-definer triggers must
 -- not attribute these rows to a leftover authenticated session.
 set local role postgres;
@@ -38,9 +48,9 @@ values ('a9090000-0000-4000-8000-000000000020', 'a9090000-0000-4000-8000-0000000
 
 -- 1-3: only the ownership-checked RPCs may write review data.
 select extensions.ok(
-  not has_function_privilege('anon', 'public.save_review(uuid,uuid,smallint,text,boolean)', 'EXECUTE')
+  not has_function_privilege('anon', 'public.save_review(uuid,uuid,integer,text,boolean)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.toggle_review_helpful(uuid)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.add_review_photo(uuid,text,smallint)', 'EXECUTE'),
+  and not has_function_privilege('anon', 'public.add_review_photo(uuid,text,integer)', 'EXECUTE'),
   'M5-02: anon cannot execute the review write RPCs'
 );
 select extensions.ok(
@@ -55,11 +65,11 @@ select extensions.ok(
   'M5-03: review tables expose no direct write privileges to authenticated'
 );
 select extensions.ok(
-  has_function_privilege('authenticated', 'public.save_review(uuid,uuid,smallint,text,boolean)', 'EXECUTE')
+  has_function_privilege('authenticated', 'public.save_review(uuid,uuid,integer,text,boolean)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.delete_review(uuid)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.my_reviews()', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.toggle_review_helpful(uuid)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.add_review_photo(uuid,text,smallint)', 'EXECUTE'),
+  and has_function_privilege('authenticated', 'public.add_review_photo(uuid,text,integer)', 'EXECUTE'),
   'M5-04: authenticated keeps execute on every review mutation RPC'
 );
 
