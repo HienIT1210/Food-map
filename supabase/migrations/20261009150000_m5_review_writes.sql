@@ -21,10 +21,13 @@ begin
 end;
 $$;
 
+-- p_rating is integer, not smallint, on purpose: PostgREST sends a bare JSON number as integer, so
+-- a smallint parameter makes the client call resolve to no function at all (42883). The 1..5 range
+-- is enforced below and the smallint column cast is implicit.
 create or replace function public.save_review(
   p_restaurant_id uuid,
   p_dish_id uuid,
-  p_rating smallint,
+  p_rating integer,
   p_content text,
   p_is_anonymous boolean
 ) returns uuid
@@ -75,20 +78,38 @@ begin
 end;
 $$;
 
-create or replace function public.delete_review(p_review_id uuid)
-returns boolean
+-- Deleting the row cascades review_photos, but a table cascade never removes the Storage objects.
+-- SQL DELETEs against storage.objects are blocked by Supabase Storage and would leave orphans, so
+-- this function only deletes data and returns the paths the caller must hand to the Storage API.
+drop function if exists public.delete_review(uuid);
+create function public.delete_review(p_review_id uuid)
+returns table (deleted_review_id uuid, storage_paths text[])
 language plpgsql
 security definer
 set search_path = public, extensions, pg_temp
 as $$
+declare
+  actor uuid := auth.uid();
+  photo_paths text[];
 begin
-  if auth.uid() is null then raise exception 'Authentication required' using errcode = '42501'; end if;
-  delete from storage.objects o
-  using public.review_photos photo, public.reviews review
-  where photo.review_id = review.id and o.bucket_id = 'review-photos'
-    and o.name = photo.storage_path and review.id = p_review_id and review.user_id = auth.uid();
-  delete from public.reviews where id = p_review_id and user_id = auth.uid();
-  return found;
+  if actor is null then raise exception 'Authentication required' using errcode = '42501'; end if;
+
+  select coalesce(array_agg(photo.storage_path order by photo.storage_path), '{}')
+  into photo_paths
+  from public.review_photos photo
+  where photo.review_id = p_review_id
+    and exists (
+      select 1 from public.reviews review
+      where review.id = photo.review_id and review.user_id = actor
+    );
+
+  delete from public.reviews where id = p_review_id and user_id = actor;
+  if not found then
+    -- Not the owner or already gone: return no row so the caller treats it as "not found".
+    return;
+  end if;
+
+  return query select p_review_id, photo_paths;
 end;
 $$;
 
@@ -148,7 +169,8 @@ begin
 end;
 $$;
 
-create or replace function public.add_review_photo(p_review_id uuid, p_storage_path text, p_position smallint)
+-- p_position is integer for the same PostgREST reason as p_rating above.
+create or replace function public.add_review_photo(p_review_id uuid, p_storage_path text, p_position integer)
 returns void
 language plpgsql
 security definer
@@ -164,18 +186,19 @@ begin
 end;
 $$;
 
-revoke all on function public.save_review(uuid, uuid, smallint, text, boolean) from public, anon;
+-- Only authenticated callers may execute the review mutation RPCs; anon keeps none of them.
+revoke all on function public.save_review(uuid, uuid, integer, text, boolean) from public, anon;
 revoke all on function public.delete_review(uuid) from public, anon;
 revoke all on function public.my_review_for_target(uuid, uuid) from public, anon;
 revoke all on function public.my_reviews() from public, anon;
 revoke all on function public.toggle_review_helpful(uuid) from public, anon;
-revoke all on function public.add_review_photo(uuid, text, smallint) from public, anon;
-grant execute on function public.save_review(uuid, uuid, smallint, text, boolean) to authenticated;
+revoke all on function public.add_review_photo(uuid, text, integer) from public, anon;
+grant execute on function public.save_review(uuid, uuid, integer, text, boolean) to authenticated;
 grant execute on function public.delete_review(uuid) to authenticated;
 grant execute on function public.my_review_for_target(uuid, uuid) to authenticated;
 grant execute on function public.my_reviews() to authenticated;
 grant execute on function public.toggle_review_helpful(uuid) to authenticated;
-grant execute on function public.add_review_photo(uuid, text, smallint) to authenticated;
+grant execute on function public.add_review_photo(uuid, text, integer) to authenticated;
 
 -- All mutations go through the validated RPCs so anonymous eligibility and review limits cannot be skipped.
 revoke insert, update, delete on table public.reviews from public, anon, authenticated;

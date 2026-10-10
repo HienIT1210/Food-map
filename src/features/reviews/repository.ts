@@ -92,7 +92,19 @@ export async function removeReview(reviewId: string): Promise<void> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("delete_review", { p_review_id: reviewId });
   if (error) throw new Error(error.message);
-  if (data !== true) throw new Error("Review not found");
+  const rows = z.array(z.object({
+    deleted_review_id: z.string().uuid(),
+    storage_paths: z.array(z.string()).nullable(),
+  }).strict()).parse(data ?? []);
+  const deleted = rows[0];
+  if (!deleted) throw new Error("Review not found");
+  // Storage keeps the files when the review row is deleted, and Supabase blocks SQL deletes on
+  // storage.objects, so the owner removes them through the Storage API.
+  const paths = deleted.storage_paths ?? [];
+  if (paths.length > 0) {
+    const { error: removeError } = await supabase.storage.from("review-photos").remove(paths);
+    if (removeError) throw new Error(removeError.message);
+  }
 }
 
 export async function toggleHelpful(reviewId: string): Promise<boolean> {
