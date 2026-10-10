@@ -145,15 +145,15 @@ select extensions.throws_ok(
 );
 set local "request.jwt.claims" to '{"sub":"a9090000-0000-4000-8000-000000000001","role":"authenticated"}';
 
--- Evidence for M5-15. helpful_count must be read as postgres: the reviews RLS policy only exposes
--- rows owned by auth.uid(), so an authenticated read of another user's review returns no row and
--- the comparison collapses to NULL instead of true/false.
+-- Evidence for M5-15/M5-16. helpful_count must be read as postgres: the reviews RLS policy only
+-- exposes rows owned by auth.uid(), so an authenticated read of another user's review returns no
+-- row and the comparison collapses to NULL (which pgTAP treats as a hard failure).
 select extensions.diag('>>> BEFORE M5-15: role=' || current_user::text
   || ' auth.uid=' || coalesce(auth.uid()::text, 'NULL')
   || ' reviews-visible-to-role='
   || (select count(*)::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020')
-  || ' helpful_count-via-public_reviews='
-  || coalesce((select helpful_count::text from public.public_reviews where id = 'a9090000-0000-4000-8000-000000000020'), 'NULL'));
+  || ' helpful_count-visible=' || coalesce((select helpful_count::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'), 'NULL')
+  || ' (expected: 0 visible under RLS)');
 
 select extensions.lives_ok(
   $$select public.toggle_review_helpful('a9090000-0000-4000-8000-000000000020')$$,
@@ -165,12 +165,14 @@ set local "request.jwt.claims" to '{}';
 select extensions.diag('>>> AFTER M5-15: role=' || current_user::text
   || ' review_rows=' || (select count(*)::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020')
   || ' helpful_count=' || coalesce((select helpful_count::text from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'), 'NULL')
-  || ' (expected: 1 / 1)');
+  || ' review_helpful_rows=' || (select count(*)::text from public.review_helpful where review_id = 'a9090000-0000-4000-8000-000000000020')
+  || ' (expected: 1 / 1 / 1)');
 select extensions.is(
   (select helpful_count from public.reviews where id = 'a9090000-0000-4000-8000-000000000020'),
   1,
   'M5-16: the vote derives helpful_count from the vote table, not from client input'
 );
+select extensions.diag('>>> reached the end of 09 before finish()');
 
 select * from extensions.finish(true);
 rollback;

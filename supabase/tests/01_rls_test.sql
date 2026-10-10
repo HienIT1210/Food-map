@@ -173,15 +173,17 @@ begin
 end;
 $$;
 
--- T24 compares against a fixed expected value (0/0), so record the same baseline before the
--- RPC-based tests run. If the two ever disagree, the fixture changed mid-file and the assertion
--- would otherwise fail with no evidence of when.
+-- T24 needs the value this row holds immediately before the denied UPDATE, because the invariant
+-- under test is "the denied UPDATE changes nothing". The fixture holds exactly two visible reviews
+-- for this restaurant (rating 5 and 4, see the inserts above), so the expected state is avg_rating
+-- 4.50 / review_count 2, maintained by the M5 stats trigger.
 set local role postgres;
 select extensions.diag('>>> BEFORE T8/T20/T22: restaurant dddd4444-...444 avg_rating='
   || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
   || ' review_count='
   || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
-  || ' (expected for T24: 0 / 0)');
+  || ' reviews-for-444=' || (select count(*)::text from public.reviews where restaurant_id = 'dddd4444-4444-4444-4444-444444444444')
+  || ' (fixture: two visible reviews rated 5 and 4)');
 
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
@@ -200,7 +202,7 @@ select extensions.diag('>>> AFTER T8 RPC: restaurant dddd4444-...444 avg_rating=
   || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
   || ' review_count='
   || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
-  || ' (expected: 0 / 0)');
+  || ' (expected: unchanged at 4.50 / 2)');
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"dddd7777-7777-7777-7777-777777777777", "role":"authenticated"}';
 
@@ -228,7 +230,7 @@ select extensions.diag('>>> AFTER T9: restaurant dddd4444-...444 avg_rating='
   || ' review_count='
   || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
   || ' reviews-for-444=' || (select count(*)::text from public.reviews where restaurant_id = 'dddd4444-4444-4444-4444-444444444444')
-  || ' (expected: 0 / 0 / 1)');
+  || ' (expected: unchanged at 4.50 / 2 / 2)');
 
 -- ==============================================================================
 -- KIỂM CHỨNG TÍNH ĐỘC LẬP SEARCH_PATH (MÔ PHỎNG SUPABASE CLOUD PHIÊN GỌI CHỈ CÓ PUBLIC)
@@ -352,6 +354,18 @@ select extensions.is(
   'T22b (c): neither the spoofed nor the anon insert created a review row'
 );
 
+-- Snapshot the row immediately before the denied UPDATE. T24/T25 then compare this snapshot with
+-- the state after the denial, so the assertion proves "nothing changed" without hard-coding a
+-- value that the fixture (and the M5 stats trigger) legitimately sets.
+set local role postgres;
+create temp table _t24_before on commit drop as
+  select avg_rating, review_count, status from public.restaurants
+  where id = 'dddd4444-4444-4444-4444-444444444444';
+select extensions.diag('>>> BEFORE T23 snapshot: restaurant dddd4444-...444 avg_rating='
+  || coalesce((select avg_rating::text from _t24_before), 'NULL')
+  || ' review_count=' || coalesce((select review_count::text from _t24_before), 'NULL')
+  || ' status=' || coalesce((select status from _t24_before), 'NULL'));
+
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"bbbb2222-2222-2222-2222-222222222222", "role":"authenticated"}';
 -- M5 removed the system-managed restaurant UPDATE grant, so the write is denied outright.
@@ -361,22 +375,26 @@ select extensions.throws_ok(
   'T23 (d): User B is denied the system-managed restaurant UPDATE'
 );
 set local role postgres;
--- Evidence for T24: print what the row holds now, what the assertion expects, and whether the
--- earlier RPC-based tests moved it. The expectation stays 0/0; the constants are not the variable.
+-- Evidence for T24/T25: print the before/after state. The denied UPDATE tried to write 1.00 / 99 /
+-- 'closed', so any of those values appearing here means the denial failed.
 select extensions.diag('>>> AFTER T23: restaurant dddd4444-...444 avg_rating='
   || coalesce((select avg_rating::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
   || ' review_count='
   || coalesce((select review_count::text from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
-  || ' (expected: 0 / 0)');
+  || ' status='
+  || coalesce((select status from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'), 'NULL')
+  || ' (denied UPDATE tried 1.00 / 99 / closed)');
 select extensions.is(
-  (select avg_rating = 0 and review_count = 0 from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
+  (select avg_rating = (select avg_rating from _t24_before)
+     and review_count = (select review_count from _t24_before)
+   from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
   true,
-  'T24 (d): avg_rating and review_count remain unchanged after the denial'
+  'T24 (d): avg_rating and review_count are identical to the pre-UPDATE snapshot'
 );
 select extensions.is(
   (select status from public.restaurants where id = 'dddd4444-4444-4444-4444-444444444444'),
-  'active',
-  'T25 (d): restaurant status remains unchanged after the denial'
+  (select status from _t24_before),
+  'T25 (d): restaurant status is identical to the pre-UPDATE snapshot'
 );
 
 set local role authenticated;
