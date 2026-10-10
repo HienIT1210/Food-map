@@ -4,7 +4,20 @@ This document records the M1 RLS hardening tests and the deliberate mutation che
 
 ## M6 — restaurant creation, duplicate guard and reports
 
-Three files carry the M6 rules: `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(52)`, labels `M6-01…M6-52`), plus the reworked restaurant blocks in `01_rls_test.sql` (`plan(50)`) and `05_security_privileges_test.sql` (`plan(25)`). Every count is produced by a parser that walks balanced parentheses, not by hand.
+Three files carry the M6 rules: `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(62)`, labels `M6-01…M6-62`), plus the reworked restaurant blocks in `01_rls_test.sql` (`plan(52)`) and `05_security_privileges_test.sql` (`plan(25)`). Every count is produced by a parser that walks balanced parentheses, not by hand.
+
+### Hints are never `throws_ok` message patterns
+
+`throws_ok(sql, sqlstate, message_pattern)` compares its third argument with the error **message**. `duplicate_restaurant` and `restaurant_daily_limit` are the error **hint**, so those assertions could never pass for the right reason (and an empty pattern would have made them pass for none). Both files therefore define the same helper:
+
+```sql
+create function pg_temp.capture_error(p_sql text)
+returns table (sqlstate text, message text, hint text, detail text) ...
+```
+
+It executes the statement inside its own subtransaction, captures `RETURNED_SQLSTATE`, `MESSAGE_TEXT`, `PG_EXCEPTION_HINT` and `PG_EXCEPTION_DETAIL`, and returns them (one row of NULLs when nothing was raised, so a caller assertion fails instead of erroring out). Tests then assert **sqlstate and hint as two separate assertions** — never a bare `P0001`, because both "duplicate" and "quota exhausted" use `P0001` and a message-only check would pass for the wrong reason. `diag()` output is produced by selecting from the helper, never by `PERFORM` inside a `DO` block, because `PERFORM` discards the result and the TAP comment never reaches the log.
+
+In `01` every assertion also carries a stable marker comment `-- A<nn> (assertion n of 52)`, so a plan/run mismatch identifies the missing test directly from the log instead of by counting.
 
 ### What the first two CI attempts proved
 
@@ -30,7 +43,7 @@ Three files carry the M6 rules: `supabase/tests/10_m6_restaurant_creation_test.s
 | M6-19 | Out-of-range coordinates refused |
 | M6-20/21 | Unconfirmed duplicate refused, identified by `hint = duplicate_restaurant` (captured through `GET STACKED DIAGNOSTICS`) |
 | M6-22 | `p_confirm_new = true` creates the place |
-| M6-23/24/25 | Fourth and fifth places of the day allowed; the sixth refused with `hint = restaurant_daily_limit` |
+| M6-23�M6-27 | Four places created through the RPC; the count asserted with the RPC predicate equals `app.restaurant_daily_limit` before the refused call |
 | M6-26…M6-29 | Report guards: no self-report, invalid reason refused, banned account cannot create or report |
 | M6-30/31/32 | Report stored once per reporter; below threshold the status equals the pre-report snapshot |
 | M6-33/34 | A repeat report is refused (23505) and leaves the place `active` |
