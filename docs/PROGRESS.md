@@ -60,6 +60,13 @@ Job `database` báo `Files=9, Tests=62` rồi dừng. Ba nguyên nhân, mỗi ng
 
 **Bài học fixture (đã ghi vào `docs/SECURITY-TESTS.md`):** mọi lần đọc lại để quan sát hàng của **người dùng khác** phải chạy bằng vai chủ sở hữu DB; dưới `authenticated` RLS biến giá trị thành "không có hàng" và subquery không bảo vệ sẽ trả NULL — pgTAP coi đó là lỗi cứng, không phải false.
 
+### 3.4. Vòng CI 3 (commit `59af17c`, Files=9, Tests=119) — 2 lỗi còn lại
+
+1. **`01` T24 = false, và lần này `diag()` đã chỉ đúng nguyên nhân:** quán `dddd4444-…444` giữ `avg_rating=4.50 review_count=2` ở **mọi** mốc (trước T8, sau RPC T8, sau T9, sau T23). Quán này có đúng 2 review visible trong fixture (rating 5 của User A và review ẩn danh rating 4 của User B), và trigger `recalculate_restaurant_review_stats` của M5 tính trung bình thành 4.50 — trigger này **mới có ở M5**, nên kỳ vọng `0/0` cũ không còn đúng. T8/T20/T22/T23 không hề làm đổi giá trị. Đã sửa T24/T25 thành so sánh **trước/sau**: chụp hàng vào temp table ngay trước UPDATE bị từ chối (UPDATE cố ghi `1.00 / 99 / closed`), rồi khẳng định giá trị sau y hệt snapshot. Không bịa hằng số.
+2. **`09` vẫn 15/16.** Thủ phạm là biểu thức gộp `is(toggle_review_helpful(...) and (select helpful_count …) = 1, true)`: phần đọc chạy bằng `authenticated`, RLS ẩn hàng của người khác → NULL → `finish(true)` coi là lỗi cứng và dừng file. Đã tách thành hai assertion độc lập: `lives_ok` cho thao tác vote, rồi đọc lại `helpful_count` bằng `postgres`; thêm `diag()` in số hàng bảng vote và một mốc ngay trước `finish()` để lần sau thấy rõ assertion nào ngừng đếm.
+
+**Bài học bổ sung:** khi fixture hợp lệ sinh ra giá trị dẫn xuất (`avg_rating`/`review_count` từ trigger), assertion phải so **trước/sau**, không so với hằng số tự chọn — hằng số sẽ âm thầm khẳng định "trigger không chạy", ngược yêu cầu milestone.
+
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
 1. Push nhánh và chờ CI; nếu job `database` đỏ thì thêm `diag()` để lấy bằng chứng rồi sửa theo đúng nguyên nhân.
