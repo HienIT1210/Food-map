@@ -4,7 +4,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set search_path = public, extensions;
 
-select extensions.plan(62);
+select extensions.plan(63);
 
 -- ---------------------------------------------------------------------------
 -- Shared helper: throws_ok's third argument is a MESSAGE pattern, so a test that needs the HINT
@@ -249,17 +249,25 @@ select extensions.throws_ok(
 -- configured limit and the N+1 call is the only one that can be refused.
 -- ---------------------------------------------------------------------------
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000004","role":"authenticated"}';
-select extensions.throws_ok(
-  $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$,
-  'A similar restaurant is already within 50m%', null,
-  'M6-20: an unconfirmed duplicate is refused'
+-- throws_ok's second argument is an ERRCODE, not the message: passing a message there makes the
+-- call report caught "P0001: <msg>" wanted "<msg>". The duplicate refusal is therefore captured
+-- instead and asserted on three separate facts.
+select extensions.is(
+  (select err_sqlstate from public.m6_capture_error(
+     $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)),
+  'P0001',
+  'M6-20: an unconfirmed duplicate is refused with P0001'
 );
--- The hint is a separate column of the error, so it must be captured and asserted separately:
--- throws_ok's third argument is a message pattern and cannot match a hint.
 select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)),
   'duplicate_restaurant',
   'M6-21: the duplicate refusal carries the duplicate_restaurant hint'
+);
+select extensions.ok(
+  (select err_message from public.m6_capture_error(
+     $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$))
+  like 'A similar restaurant is already within 50m%',
+  'M6-22: the refusal message names the similar restaurant (asserted with like)'
 );
 select extensions.diag('>>> duplicate refusal captured: sqlstate='
   || coalesce((select err_sqlstate from public.m6_capture_error(
@@ -270,7 +278,7 @@ select extensions.diag('>>> duplicate refusal captured: sqlstate='
        $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)), 'NULL'));
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Bún', 'confirmed as a different place', 21.0101, 105.8101, null, '[]'::jsonb, true)$$,
-  'M6-22: confirming "this is a different place" creates the restaurant next to a similar name'
+  'M6-23: confirming "this is a different place" creates the restaurant next to a similar name'
 );
 
 -- Fill the quota with N = app.restaurant_daily_limit places (default 5). Names differ and the
@@ -278,28 +286,32 @@ select extensions.lives_ok(
 -- duplicate and the refusal below can only be the quota.
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Quota Một', '15 M6 Street', 21.09, 105.89)$$,
-  'M6-23: the second place of the day is allowed'
+  'M6-24: the second place of the day is allowed'
 );
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Quota Hai', '16 M6 Street', 21.10, 105.90)$$,
-  'M6-24: the third place of the day is allowed'
+  'M6-25: the third place of the day is allowed'
 );
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Quota Ba', '17 M6 Street', 21.11, 105.91)$$,
-  'M6-25: the fourth place of the day is allowed'
+  'M6-26: the fourth place of the day is allowed'
 );
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Quota Bốn', '18 M6 Street', 21.12, 105.92)$$,
-  'M6-26: the fifth place of the day is allowed, reaching the default limit'
+  'M6-27: the fifth place of the day is allowed, reaching the default limit'
 );
--- The count assertion and the diagnostic must sit BEFORE the refused call, using exactly the
--- predicate the RPC uses, so the next run proves the limit really was reached.
+-- The count assertion and the diagnostics must sit BEFORE the refused call, using exactly the
+-- predicate the RPC uses, so the next run proves the limit really was reached. Reading created_by
+-- requires the privileged role: an API role has no SELECT on that column (M6 revoked it), so the
+-- read is a separate step under postgres and the role is switched back before the next RPC call.
+set local role postgres;
+set local "request.jwt.claims" to '{}';
 select extensions.is(
   (select count(*)::int from public.restaurants
    where created_by = 'a6060000-0000-4000-8000-000000000004'
      and created_at >= now() - interval '1 day'),
   coalesce(nullif(current_setting('app.restaurant_daily_limit', true), '')::integer, 5),
-  'M6-27: the caller holds exactly app.restaurant_daily_limit places in the last day'
+  'M6-28: the caller holds exactly app.restaurant_daily_limit places in the last day'
 );
 select extensions.diag('>>> before the N+1 call: app.restaurant_daily_limit='
   || coalesce(current_setting('app.restaurant_daily_limit', true), '(unset -> default 5)')
@@ -308,22 +320,24 @@ select extensions.diag('>>> before the N+1 call: app.restaurant_daily_limit='
       where created_by = 'a6060000-0000-4000-8000-000000000004'
         and created_at >= now() - interval '1 day')
   || ' trigger reads the same setting since M6');
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000004","role":"authenticated"}';
 select extensions.is((select err_sqlstate from public.m6_capture_error(
   $$select public.create_restaurant('M6 Quota Sáu', '19 M6 Street', 21.13, 105.93)$$)),
   'P0001',
-  'M6-28: the N+1 call fails with the P0001 quota error'
+  'M6-29: the N+1 call fails with the P0001 quota error'
 );
 select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Quota Sáu', '19 M6 Street', 21.13, 105.93)$$)),
   'restaurant_daily_limit',
-  'M6-29: the N+1 refusal carries the restaurant_daily_limit hint'
+  'M6-30: the N+1 refusal carries the restaurant_daily_limit hint'
 );
 -- Quota is checked before the duplicate guard (ASSUMPTIONS M6-12): a call that is both over quota
 -- and a duplicate must report the quota.
 select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Bún', 'near duplicate', 21.0101, 105.8101)$$)),
   'restaurant_daily_limit',
-  'M6-30: an over-quota duplicate reports the quota hint, not the duplicate hint'
+  'M6-31: an over-quota duplicate reports the quota hint, not the duplicate hint'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -332,7 +346,7 @@ select extensions.is(
    where created_by = 'a6060000-0000-4000-8000-000000000004'
      and created_at >= now() - interval '1 day'),
   5,
-  'M6-31: the refused calls created no additional restaurant (snapshot is still N)'
+  'M6-32: the refused calls created no additional restaurant (snapshot is still N)'
 );
 select extensions.diag('>>> after the refused calls: app.restaurant_daily_limit='
   || coalesce(current_setting('app.restaurant_daily_limit', true), '(unset -> default 5)')
@@ -359,16 +373,16 @@ set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000005","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Limit Hai 1', '20 M6 Street', 21.20, 105.70)$$,
-  'M6-32: with app.restaurant_daily_limit=2 the first place is allowed'
+  'M6-33: with app.restaurant_daily_limit=2 the first place is allowed'
 );
 select extensions.lives_ok(
   $$select public.create_restaurant('M6 Limit Hai 2', '21 M6 Street', 21.21, 105.71)$$,
-  'M6-33: with app.restaurant_daily_limit=2 the second place is allowed'
+  'M6-34: with app.restaurant_daily_limit=2 the second place is allowed'
 );
 select extensions.is((select err_hint from public.m6_capture_error(
   $$select public.create_restaurant('M6 Limit Hai 3', '22 M6 Street', 21.22, 105.72)$$)),
   'restaurant_daily_limit',
-  'M6-34: the third place is refused by the configured limit, not a hard-coded five'
+  'M6-35: the third place is refused by the configured limit, not a hard-coded five'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -378,7 +392,7 @@ select extensions.is(
    where created_by = 'a6060000-0000-4000-8000-000000000005'
      and created_at >= now() - interval '1 day'),
   2,
-  'M6-35: the configured limit stopped the third call (still two rows)'
+  'M6-36: the configured limit stopped the third call (still two rows)'
 );
 
 -- ---------------------------------------------------------------------------
@@ -387,20 +401,20 @@ select extensions.is(
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000012', 'closed')$$,
-  '42501', null, 'M6-36: a user cannot report a restaurant they created'
+  '42501', null, 'M6-37: a user cannot report a restaurant they created'
 );
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000012', 'not a reason')$$,
-  'P0001', null, 'M6-37: an unsupported report reason is refused'
+  'P0001', null, 'M6-38: an unsupported report reason is refused'
 );
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000003","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.create_restaurant('M6 Banned Quán', 'banned', 21.3, 105.3)$$,
-  '42501', null, 'M6-38: a banned account cannot create a restaurant'
+  '42501', null, 'M6-39: a banned account cannot create a restaurant'
 );
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000012', 'closed')$$,
-  '42501', null, 'M6-39: a banned account cannot report a restaurant'
+  '42501', null, 'M6-40: a banned account cannot report a restaurant'
 );
 
 -- ---------------------------------------------------------------------------
@@ -419,7 +433,7 @@ set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000013', 'closed')$$,
-  'M6-40: one account can report a restaurant it did not create'
+  'M6-41: one account can report a restaurant it did not create'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -427,13 +441,13 @@ select extensions.is(
   (select count(distinct reporter_id)::integer from public.reports
    where target_type = 'restaurant' and target_id = 'a6060000-0000-4000-8000-000000000013'),
   1,
-  'M6-41: the report is stored as one distinct reporter'
+  'M6-42: the report is stored as one distinct reporter'
 );
 select set_config('app.restaurant_report_threshold', '3', true);
 select extensions.is(
   (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000013'),
   (select status from _m6_status_before),
-  'M6-42: below the threshold the status is unchanged from the snapshot'
+  'M6-43: below the threshold the status is unchanged from the snapshot'
 );
 
 -- The same person reporting the same restaurant again must not count twice.
@@ -441,14 +455,14 @@ set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.throws_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000013', 'wrong_location')$$,
-  '23505', null, 'M6-43: one account cannot report the same restaurant twice'
+  '23505', null, 'M6-44: one account cannot report the same restaurant twice'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
 select extensions.is(
   (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000013'),
   'active',
-  'M6-44: a repeated report from the same account leaves the restaurant active'
+  'M6-45: a repeated report from the same account leaves the restaurant active'
 );
 
 -- ---------------------------------------------------------------------------
@@ -459,17 +473,17 @@ create temp table _m6_status_before_hide on commit drop as
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000014', 'closed')$$,
-  'M6-45: the first report on the three-reporter target is accepted'
+  'M6-46: the first report on the three-reporter target is accepted'
 );
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000006","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000014', 'wrong_info')$$,
-  'M6-46: the second distinct report is accepted'
+  'M6-47: the second distinct report is accepted'
 );
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000007","role":"authenticated"}';
 select extensions.lives_ok(
   $$select public.report_restaurant('a6060000-0000-4000-8000-000000000014', 'wrong_location')$$,
-  'M6-47: the third distinct report is accepted and reaches the threshold'
+  'M6-48: the third distinct report is accepted and reaches the threshold'
 );
 set local role postgres;
 set local "request.jwt.claims" to '{}';
@@ -479,30 +493,30 @@ select extensions.diag('>>> AFTER threshold reports: restaurant ...014 status = 
 select extensions.is(
   (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000014'),
   'hidden_pending_review',
-  'M6-48: reaching three distinct reporters hides the restaurant'
+  'M6-49: reaching three distinct reporters hides the restaurant'
 );
 select extensions.ok(
   (select status from _m6_status_before_hide) = 'active'
   and (select status from public.restaurants where id = 'a6060000-0000-4000-8000-000000000014') = 'hidden_pending_review',
-  'M6-49: the status changed from the pre-report snapshot, not by assumption'
+  'M6-50: the status changed from the pre-report snapshot, not by assumption'
 );
 select extensions.is(
   (select count(*)::int from public.restaurants_in_bounds(20.9, 105.7, 21.1, 105.9)
    where id = 'a6060000-0000-4000-8000-000000000013'),
   1,
-  'M6-50: an active restaurant in the same box is still visible, so the next assertion can fail'
+  'M6-51: an active restaurant in the same box is still visible, so the next assertion can fail'
 );
 select extensions.is(
   (select count(*)::int from public.restaurants_in_bounds(20.9, 105.7, 21.1, 105.9)
    where id = 'a6060000-0000-4000-8000-000000000014'),
   0,
-  'M6-51: a hidden restaurant disappears from restaurants_in_bounds'
+  'M6-52: a hidden restaurant disappears from restaurants_in_bounds'
 );
 select extensions.is(
   (select count(*)::int from public.search_restaurants('M6 Bị Báo Ba Người', 50)
    where id = 'a6060000-0000-4000-8000-000000000014'),
   0,
-  'M6-52: a hidden restaurant disappears from search'
+  'M6-53: a hidden restaurant disappears from search'
 );
 
 -- ---------------------------------------------------------------------------
@@ -513,14 +527,14 @@ set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000005"
 select extensions.is(
   (select count(*)::int from public.reports),
   0,
-  'M6-53: a user with no reports cannot read anyone else reports'
+  'M6-54: a user with no reports cannot read anyone else reports'
 );
 set local role anon;
 set local "request.jwt.claims" to '{"role":"anon"}';
 select extensions.ok(
   not has_column_privilege('anon', 'public.restaurants', 'created_by', 'SELECT')
   and has_column_privilege('anon', 'public.restaurants', 'name', 'SELECT'),
-  'M6-54: anon keeps the safe restaurant columns but not created_by'
+  'M6-55: anon keeps the safe restaurant columns but not created_by'
 );
 
 -- ---------------------------------------------------------------------------
@@ -552,14 +566,14 @@ select extensions.diag('>>> SELECT privilege per column (postgres-verified): '
 select extensions.ok(
   not has_table_privilege('anon', 'public.restaurants', 'SELECT')
   and not has_table_privilege('authenticated', 'public.restaurants', 'SELECT'),
-  'M6-55: neither API role holds table-level SELECT on restaurants'
+  'M6-56: neither API role holds table-level SELECT on restaurants'
 );
 select extensions.ok(
   has_column_privilege('anon', 'public.restaurants', 'id', 'SELECT')
   and has_column_privilege('anon', 'public.restaurants', 'status', 'SELECT')
   and has_column_privilege('authenticated', 'public.restaurants', 'review_count', 'SELECT')
   and has_column_privilege('authenticated', 'public.restaurants', 'created_at', 'SELECT'),
-  'M6-56: the public columns stay readable for both roles'
+  'M6-57: the public columns stay readable for both roles'
 );
 select extensions.ok(
   (
@@ -571,7 +585,7 @@ select extensions.ok(
       and a.attname <> 'created_by'
       and not has_column_privilege('anon', 'public.restaurants', a.attname, 'SELECT')
   ) = 0,
-  'M6-57: every non-created_by column is granted to anon'
+  'M6-58: every non-created_by column is granted to anon'
 );
 select extensions.ok(
   (
@@ -583,20 +597,20 @@ select extensions.ok(
       and a.attname <> 'created_by'
       and not has_column_privilege('authenticated', 'public.restaurants', a.attname, 'SELECT')
   ) = 0,
-  'M6-58: every non-created_by column is granted to authenticated'
+  'M6-59: every non-created_by column is granted to authenticated'
 );
 
 set local role anon;
 set local "request.jwt.claims" to '{"role":"anon"}';
 select extensions.throws_ok(
   'select created_by from public.restaurants',
-  '42501', null, 'M6-59: anon reading created_by gets a privilege error, not rows'
+  '42501', null, 'M6-60: anon reading created_by gets a privilege error, not rows'
 );
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a6060000-0000-4000-8000-000000000001","role":"authenticated"}';
 select extensions.throws_ok(
   'select created_by from public.restaurants',
-  '42501', null, 'M6-60: authenticated reading created_by gets a privilege error, not rows'
+  '42501', null, 'M6-61: authenticated reading created_by gets a privilege error, not rows'
 );
 
 -- M6-62/M6-63: the shared duplicate helper must not be callable by anon. CREATE FUNCTION grants
@@ -612,13 +626,13 @@ select extensions.diag('>>> find_duplicate_restaurants execute: anon='
 select extensions.ok(
   not has_function_privilege('anon', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.find_duplicate_restaurants(text, double precision, double precision, integer, numeric)', 'EXECUTE'),
-  'M6-61: the duplicate helper is callable by authenticated but not by anon'
+  'M6-62: the duplicate helper is callable by authenticated but not by anon'
 );
 set local role anon;
 set local "request.jwt.claims" to '{"role":"anon"}';
 select extensions.throws_ok(
   $$select public.find_duplicate_restaurants('M6 Bún', 21.01, 105.81)$$,
-  '42501', null, 'M6-62: anon calling the duplicate helper directly is refused'
+  '42501', null, 'M6-63: anon calling the duplicate helper directly is refused'
 );
 
 select * from extensions.finish(true);

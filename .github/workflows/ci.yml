@@ -65,3 +65,16 @@ jobs:
           fi
       - name: Run pgTAP / RLS tests
         run: supabase test db
+      # Diagnostic: `supabase test db` only summarises, so a file that emits fewer TAP lines than
+      # its plan can hide WHICH assertion was skipped. This step runs the two files that carry the
+      # numbered markers straight through psql so the log shows every `ok N - name` line and every
+      # `>>> about to run A<nn>` trace, making a missing assertion identifiable. It does not gate
+      # the build (no ON_ERROR_STOP): the step above is still the pass/fail signal.
+      - name: Diagnostic - raw TAP lines for 01 and 10
+        if: always()
+        run: |
+          for file in supabase/tests/01_rls_test.sql supabase/tests/10_m6_restaurant_creation_test.sql; do
+            echo "===== RAW TAP: $file ====="
+            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f "$file" 2>&1 \
+              | grep -E "about to run A|^(not )?ok [0-9]+|^# Failed test|^# Looks like" || true
+          done
