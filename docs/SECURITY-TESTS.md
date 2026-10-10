@@ -138,11 +138,14 @@ M5 revoked `INSERT`, `UPDATE` and `DELETE` on `public.reviews`, `public.review_p
 
 The rule to attack: **API roles must not be able to write review data outside the ownership-checked RPCs, and anonymous review photos must not carry the owner UUID.**
 
+Branch note: the first mutation branch `test/m5-write-rule-mutation` (`fedf3af`) was created from `076b3d2` and is now **stale** — it contains the `smallint` signatures and the SQL `storage.objects` delete. Delete it (`git push origin --delete test/m5-write-rule-mutation`) and recreate the branch from the green `main` before running any mutation. No PR was opened for it.
+
 Mutation plan (one mutation at a time, on a temporary branch, PR never merged):
 
 1. Re-grant table-level `INSERT, UPDATE, DELETE ON public.reviews, public.review_photos, public.review_helpful TO authenticated` at the end of the M5 migration. Expected red: `05` R20 and R23, `09` M5-03, and `08`'s "review inserts must go through the validated RPC" / "review photo metadata writes must use the ownership-checked RPC".
-2. Weaken `add_review_photo`'s path check to `true`. Expected red: `01` T35 (blacklist still catches the owner UUID, proving the trigger is a backstop, not the primary control) and `09` where the path contract is asserted.
-3. Drop the `trg_enforce_review_system_fields` wiring. Expected red: `05` R11/R12/R13/R14 and `09` M5-04 once direct privilege is restored by mutation 1 — the trigger is only observable while a privileged write is possible, which is exactly why the wiring fix matters.
+2. Change `save_review.p_rating` and `add_review_photo.p_position` back to `smallint`. Expected red: `08` and `09` fail hard with `42883`, which is exactly the defect this round fixed — a useful regression tripwire for the PostgREST boundary.
+3. Weaken `add_review_photo`'s path check to `true`. Expected red: `01` T35 (the blacklist trigger still catches the owner UUID, proving it is a backstop, not the primary control).
+4. Replace `delete_review`'s `returns table (deleted_review_id uuid, storage_paths text[])` with the old boolean signature that deleted `storage.objects`. Expected red: the `repository.ts` contract and `08`'s "review owner can delete their review through the RPC" / photo-cascade assertions.
 
 Record the TAP test names and the failing lines here once CI reports them. Do not merge the mutation PR; delete the branch afterwards.
 
