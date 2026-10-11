@@ -4,7 +4,7 @@ This document records the M1 RLS hardening tests and the deliberate mutation che
 
 ## M6 — restaurant creation, duplicate guard and reports
 
-Three files carry the M6 rules: `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(62)`, labels `M6-01…M6-62`), plus the reworked restaurant blocks in `01_rls_test.sql` (`plan(52)`) and `05_security_privileges_test.sql` (`plan(25)`). Every count is produced by a parser that walks balanced parentheses, not by hand.
+Three files carry the M6 rules: `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(63)`), plus the reworked restaurant blocks in `01_rls_test.sql` (`plan(52)`) and `05_security_privileges_test.sql` (`plan(25)`). Every count is produced by a parser that walks balanced parentheses, not by hand.
 
 ### Hints are never `throws_ok` message patterns
 
@@ -18,6 +18,33 @@ returns table (sqlstate text, message text, hint text, detail text) ...
 It executes the statement inside its own subtransaction, captures `RETURNED_SQLSTATE`, `MESSAGE_TEXT`, `PG_EXCEPTION_HINT` and `PG_EXCEPTION_DETAIL`, and returns them (one row of NULLs when nothing was raised, so a caller assertion fails instead of erroring out). Tests then assert **sqlstate and hint as two separate assertions** — never a bare `P0001`, because both "duplicate" and "quota exhausted" use `P0001` and a message-only check would pass for the wrong reason. `diag()` output is produced by selecting from the helper, never by `PERFORM` inside a `DO` block, because `PERFORM` discards the result and the TAP comment never reaches the log.
 
 In `01` every assertion also carries a stable marker comment `-- A<nn> (assertion n of 52)`, so a plan/run mismatch identifies the missing test directly from the log instead of by counting.
+
+### `01_rls_test.sql` plan mismatch — root cause and correction (2026-10-11)
+
+The latest database run, [run 73](https://github.com/HienIT1210/Food-map/actions/runs/38040472334), ran the raw diagnostic step after `supabase test db` failed: the job log shows `Files=10, Tests=191`, then `01_rls_test.sql (Wstat: 0 Tests: 51 Failed: 0)` and `planned 52 tests but ran 51`. The diagnostic step had `if: always()` and completed successfully, so it was not skipped. It printed all markers A01–A52 but no `ok` lines: the `psql` default aligned table output indented each result, while the grep expression anchored `ok` at column 1. The workflow now trims leading whitespace before filtering, so the next run will print the TAP results as well as markers.
+
+Balanced statement inspection of every marker found one missing TAP call: **A22 consisted only of `diag()`**. There was no assertion following its marker, so the plan counted a test that did not exist. A22 now checks as `postgres` that the quota-rejected sixth restaurant (`Quán D quota 6`) was not inserted. It uses `count(*)` without `GROUP BY`, which returns exactly one row even when the restaurant is absent; the expected count remains `0`. `plan(52)` is unchanged.
+
+The potentially misleading candidates were checked individually:
+
+| Marker / test | Statement and zero-row analysis |
+|---|---|
+| A01 / T1, A02 / T2, A09 / T5c, A30 / T17, A31 / T18 | Each assertion has a scalar lookup by a fixture id. If a fixture is missing, the scalar is NULL, but the outer pgTAP call still executes and reports a failure. |
+| A03 / T3 | `is_empty('select ... from public_reviews where ...')` intentionally runs a query expected to return zero rows. The top-level `is_empty` call itself emits one result. |
+| A06 / T4.3 | `array_agg` has no `GROUP BY`, so the scalar aggregate yields one row (possibly NULL if nothing matches); the outer `is` still runs. |
+| A10 / T6, A11 / T7, A24–A26 / T11–T13, A27 / T14, A34 / T21, A36 / T22b, A40–A46 / T26–T32 | Each uses `count(*)` without `GROUP BY`, so the aggregate returns one row even when the filtered relation has zero matches. They test the returned count, not whether a TAP row exists. |
+| A12 / T8 | `throws_ok(save_review(...))`; the pgTAP function is called as a top-level `SELECT`, not from a filtered relation. |
+| A13–A17 / T9 | Each `lives_ok(create_restaurant(...))` is a top-level call and emits one assertion result. |
+| A18–A19 / T9f | Each `is((SELECT ... FROM m6_capture_error(...)), ...)` has a scalar subquery. `m6_capture_error` is designed to return one row on both raised and non-raised paths; if the expected error is absent, the scalar is NULL and `is` emits a failing result rather than disappearing. |
+| A20 / T9f3 | `ok((SELECT err_message ... ) LIKE ...)` is still a top-level call; a NULL boolean fails the assertion instead of suppressing TAP. |
+| A21 / T9g | `throws_ok` is a top-level call; no `FROM`, `DO`, or `PERFORM` can consume its result. |
+| A22 | **Missing before this fix:** only a marker and `diag()`, with no pgTAP assertion. Now verifies the quota denial created no row. |
+| A23 / T10 | The scalar `SELECT val FROM _t10` could be NULL if the temp fixture were absent; the outer `is` still emits TAP. `_t10` is created by a no-`FROM` scalar SELECT before this assertion. |
+| A28–A29 / T15–T16, A32 / T19, A33 / T20, A35 / T22, A37 / T23, A47–A52 / T33–T38 | These are direct top-level `throws_ok`/`lives_ok` calls. Their SQL arguments contain writes/filters, but those are inputs executed inside pgTAP and do not filter the outer assertion row. |
+| A38 / T24 | The scalar lookup by restaurant id and snapshot could return NULL if the fixture were absent, but the outer top-level `is(...)` has no `FROM` and still emits TAP; it would fail rather than vanish. |
+| A39 / T25 | Same shape as A38: a missing restaurant or snapshot yields NULL to the outer `is`, not a missing TAP row. |
+
+The same distinction applies to the other marker regions: their pgTAP calls are top-level `SELECT extensions.<assertion>(...)` statements. Scalar subqueries may produce NULL and cause a failed assertion, but cannot make the outer call return zero rows. The fixture-building `DO` block contains no pgTAP call; no `PERFORM` assertion was found. A01–A21 and A23–A52 each have exactly one assertion call after this correction.
 
 ### What the first two CI attempts proved
 
@@ -43,7 +70,7 @@ In `01` every assertion also carries a stable marker comment `-- A<nn> (assertio
 | M6-19 | Out-of-range coordinates refused |
 | M6-20/21 | Unconfirmed duplicate refused, identified by `hint = duplicate_restaurant` (captured through `GET STACKED DIAGNOSTICS`) |
 | M6-22 | `p_confirm_new = true` creates the place |
-| M6-23�M6-27 | Four places created through the RPC; the count asserted with the RPC predicate equals `app.restaurant_daily_limit` before the refused call |
+| M6-23�M6-27 | Four places created through the RPC; the count asserted with the RPC predicate equals `app.restaurant_daily_limit` before the refused call |
 | M6-26…M6-29 | Report guards: no self-report, invalid reason refused, banned account cannot create or report |
 | M6-30/31/32 | Report stored once per reporter; below threshold the status equals the pre-report snapshot |
 | M6-33/34 | A repeat report is refused (23505) and leaves the place `active` |
@@ -59,7 +86,7 @@ In `01` every assertion also carries a stable marker comment `-- A<nn> (assertio
 - *Missing grant on a new column*: add a column to `restaurants` in a later migration without granting it. The sweep counts columns where `attname <> 'created_by' and not has_column_privilege(role, ..., 'SELECT')`, so that column makes the count non-zero and the assertion fails. The `diag()` line prints `name: anon=false authenticated=false` for it.
 - *An extra grant on `created_by`*: run `grant select (created_by) on public.restaurants to anon` by hand. M6-13/M6-49/M6-50 then fail (`has_column_privilege` returns true and the behavioural select returns rows instead of 42501). No mutation PR is needed: both checks are direct reads of the live catalog.
 
-## M6 — restaurant creation, duplicate guard and reports (`supabase/tests/10_m6_restaurant_creation_test.sql`, `plan(49)`)
+## Historical M6 assertion map (superseded snapshot: `plan(49)`)
 
 Rules come from SPEC §6.4 (RES-02/03/04), §6.9, §7.1 and §7.3. Labels are sequential `M6-01 … M6-49`; the count is produced by a parser that walks balanced parentheses, not by hand.
 

@@ -76,5 +76,6 @@ jobs:
           for file in supabase/tests/01_rls_test.sql supabase/tests/10_m6_restaurant_creation_test.sql; do
             echo "===== RAW TAP: $file ====="
             psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f "$file" 2>&1 \
+              | sed 's/^[[:space:]]*//' \
               | grep -E "about to run A|^(not )?ok [0-9]+|^# Failed test|^# Looks like" || true
           done

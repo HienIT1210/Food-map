@@ -380,22 +380,32 @@ select extensions.diag('>>> AFTER T9: restaurant dddd4444-...444 avg_rating='
   || ' reviews-for-444=' || (select count(*)::text from public.reviews where restaurant_id = 'dddd4444-4444-4444-4444-444444444444')
   || ' (expected: unchanged at 4.50 / 2 / 2)');
 
+set local role postgres;
+set local "request.jwt.claims" to '{}';
+-- A22 (assertion 22 of 52)
+-- A22 trace
+select extensions.diag('>>> about to run A22');
+select extensions.is(
+  (select count(*)::integer
+   from public.restaurants
+   where created_by = 'dddd7777-7777-7777-7777-777777777777'
+     and name = 'Quán D quota 6'),
+  0,
+  'T9f4 (d): lời gọi tạo quán thứ 6 bị quota từ chối và không tạo hàng'
+);
+
 -- ==============================================================================
 -- KIỂM CHỨNG TÍNH ĐỘC LẬP SEARCH_PATH (MÔ PHỎNG SUPABASE CLOUD PHIÊN GỌI CHỈ CÓ PUBLIC)
 -- Chứng minh các hàm trong public chạy đúng ngay cả khi search_path của phiên là chỉ 'public'
 -- 1. Chạy hàm cần kiểm tra khi search_path = public, lưu kết quả vào temp table
 -- 2. Đặt lại search_path = public, extensions
--- A22 (assertion 22 of 52)
--- A22 trace
-select extensions.diag('>>> about to run A22');
 -- 3. Gọi extensions.is(...) để kiểm chứng kết quả mà không làm ảnh hưởng pgTAP
 -- ==============================================================================
-set local role postgres;
-
 -- 1. f_unaccent độc lập search_path
 set local search_path = public;
 create temp table _t10 on commit drop as select public.f_unaccent('Phở Bò Hà Nội') as val;
 set local search_path = public, extensions;
+
 -- A23 (assertion 23 of 52)
 -- A23 trace
 select extensions.diag('>>> about to run A23');
