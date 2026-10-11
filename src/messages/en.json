@@ -65,6 +65,7 @@
     "locationNotSupported": "Browser does not support geolocation.",
     "locationDenied": "Could not get location. Please grant location permission in your browser.",
     "missingStyleUrl": "Missing NEXT_PUBLIC_MAP_STYLE_URL environment variable.",
+    "styleLoadError": "The map could not be loaded. Check your connection and try again.",
     "filters": {
       "openNow": "Open Now",
       "maxPrice": "Price",

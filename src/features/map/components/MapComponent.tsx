@@ -101,6 +101,7 @@ export function MapComponent() {
   const mapRef = React.useRef<MapRef>(null);
 
   const [selectedPin, setSelectedPin] = useState<RestaurantPin | null>(null);
+  const [mapLoadError, setMapLoadError] = useState(false);
   const [filters, setFilters] = useState<MapFilters>({
     minRating: null,
     maxPrice: null,
@@ -146,6 +147,11 @@ export function MapComponent() {
       fetchInBounds(bounds, filters);
     }
   }, [fetchInBounds, filters, readBounds]);
+
+  const onMapError = useCallback(() => {
+    console.error("Map style load failed");
+    setMapLoadError(true);
+  }, []);
 
   const updateFilters = useCallback((nextFilters: MapFilters) => {
     setFilters(nextFilters);
@@ -313,6 +319,7 @@ export function MapComponent() {
         mapStyle={MAP_STYLE}
         interactiveLayerIds={["clusters", "unclustered-point"]}
         onClick={onClick}
+        onError={onMapError}
         style={{ width: "100%", height: "100%" }}
       >
         <Source
@@ -329,6 +336,15 @@ export function MapComponent() {
         </Source>
         <AttributionControl position="bottom-right" />
       </Map>
+
+      {mapLoadError && (
+        <div
+          role="alert"
+          className="absolute left-4 right-4 top-1/2 z-30 -translate-y-1/2 rounded-xl border border-red-200 bg-white p-4 text-center text-sm text-red-800 shadow-lg"
+        >
+          {t("styleLoadError")}
+        </div>
+      )}
 
       {hasMovedOutsideLoadedBounds(currentBounds, loadedBounds) && !loading && (
         <button

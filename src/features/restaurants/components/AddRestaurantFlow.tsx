@@ -17,6 +17,7 @@ type Step = "pin" | "form" | "duplicate";
 
 export function AddRestaurantFlow({ onClose }: { onClose: () => void }) {
   const t = useTranslations("addRestaurant");
+  const tMap = useTranslations("map");
   const { user, setShowLoginModal } = useAuth();
   const mapRef = useRef<MapRef | null>(null);
   const { suggestions, checking, error: checkError, schedule, reset } = useDuplicateCheck();
@@ -26,6 +27,12 @@ export function AddRestaurantFlow({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const [mapLoadError, setMapLoadError] = useState(false);
+
+  const onMapError = useCallback(() => {
+    console.error("Map style load failed");
+    setMapLoadError(true);
+  }, []);
 
   const { register, handleSubmit, watch, getValues, formState } = useForm<FormValues>({
     defaultValues: { name: "", address: "", province: "" },
@@ -153,8 +160,17 @@ export function AddRestaurantFlow({ onClose }: { onClose: () => void }) {
             mapStyle={MAP_STYLE}
             onLoad={() => readCenter()}
             onMoveEnd={readCenter}
+            onError={onMapError}
             style={{ width: "100%", height: "100%" }}
           />
+          {mapLoadError && (
+            <div
+              role="alert"
+              className="absolute left-4 right-4 top-1/2 z-20 -translate-y-1/2 rounded-xl border border-red-200 bg-white p-4 text-center text-sm text-red-800 shadow-lg"
+            >
+              {tMap("styleLoadError")}
+            </div>
+          )}
           {/* The pin is fixed at the centre; the user drags the map underneath it (no geolocation prompt). */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-full text-3xl" aria-hidden="true">📍</div>
           <div className="pointer-events-none absolute inset-x-0 top-3 z-10 text-center">

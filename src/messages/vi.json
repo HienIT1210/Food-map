@@ -65,6 +65,7 @@
     "locationNotSupported": "Trình duyệt không hỗ trợ định vị.",
     "locationDenied": "Không thể lấy vị trí. Vui lòng cấp quyền vị trí trong trình duyệt.",
     "missingStyleUrl": "Thiếu biến môi trường NEXT_PUBLIC_MAP_STYLE_URL cho bản đồ.",
+    "styleLoadError": "Không thể tải bản đồ lúc này. Vui lòng kiểm tra kết nối rồi thử lại.",
     "filters": {
       "openNow": "Đang mở cửa",
       "maxPrice": "Mức giá",
