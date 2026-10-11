@@ -21,9 +21,11 @@ In `01` every assertion also carries a stable marker comment `-- A<nn> (assertio
 
 ### `01_rls_test.sql` plan mismatch — root cause and correction (2026-10-11)
 
-The latest database run, [run 73](https://github.com/HienIT1210/Food-map/actions/runs/38040472334), ran the raw diagnostic step after `supabase test db` failed: the job log shows `Files=10, Tests=191`, then `01_rls_test.sql (Wstat: 0 Tests: 51 Failed: 0)` and `planned 52 tests but ran 51`. The diagnostic step had `if: always()` and completed successfully, so it was not skipped. It printed all markers A01–A52 but no `ok` lines: the `psql` default aligned table output indented each result, while the grep expression anchored `ok` at column 1. The workflow now trims leading whitespace before filtering, so the next run will print the TAP results as well as markers.
+The previous database run, [run 73](https://github.com/HienIT1210/Food-map/actions/runs/38040472334), ran the raw diagnostic step after `supabase test db` failed: the job log shows `Files=10, Tests=191`, then `01_rls_test.sql (Wstat: 0 Tests: 51 Failed: 0)` and `planned 52 tests but ran 51`. The diagnostic step had `if: always()` and completed successfully, so it was not skipped. It printed all markers A01–A52 but no `ok` lines: the `psql` default aligned table output indented each result, while the grep expression anchored `ok` at column 1.
 
 Balanced statement inspection of every marker found one missing TAP call: **A22 consisted only of `diag()`**. There was no assertion following its marker, so the plan counted a test that did not exist. A22 now checks as `postgres` that the quota-rejected sixth restaurant (`Quán D quota 6`) was not inserted. It uses `count(*)` without `GROUP BY`, which returns exactly one row even when the restaurant is absent; the expected count remains `0`. `plan(52)` is unchanged.
+
+The workflow now trims leading whitespace before filtering and [run 74](https://github.com/HienIT1210/Food-map/actions/runs/38118560852) confirms the fix: the database job and full CI run succeeded (`Files=10, Tests=192`, `All tests successful`). Its always-run diagnostic printed markers A01–A52 paired sequentially with `ok 1`–`ok 52`; A22 passed. The same diagnostic printed `ok 1`–`ok 63` for M6 test file `10` (`plan(63)`). The lint, type-check, unit-test, and build job also succeeded.
 
 The potentially misleading candidates were checked individually:
 

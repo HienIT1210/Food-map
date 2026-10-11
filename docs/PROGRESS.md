@@ -2,14 +2,14 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-11 bởi Copilot (đã tìm thấy assertion A22 bị thiếu; bật push trigger cho nhánh tiếp quản, chờ CI)
+**Cập nhật lần cuối:** 2026-10-11 bởi Copilot (run #74 xanh; 01 có 52/52 TAP, chờ người dùng duyệt migration M6)
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone hiện tại:** M6 — Thêm quán bằng ghim, kiểm tra trùng, báo "đóng cửa/sai vị trí" (RES-02, RES-03, RES-04, §6.9, §7.1, §7.3). Code + migration + test đã viết; CI gần nhất áp dụng migration thành công nhưng job database đỏ do `01_rls_test.sql` khai `plan(52)` và chỉ chạy 51 assertion. Đã xác định assertion thiếu là A22, bổ sung kiểm tra quota và giữ `plan(52)`; chưa có CI xác nhận bản sửa, chưa `db push`.
-- **CI nhánh tiếp quản:** workflow giờ nhận push từ `agents/project-takeover-review-map`; hai commit sửa lỗi đang chờ push và CI.
+- **Milestone hiện tại:** M6 — Thêm quán bằng ghim, kiểm tra trùng, báo "đóng cửa/sai vị trí" (RES-02, RES-03, RES-04, §6.9, §7.1, §7.3). Run #74 xanh: `01_rls_test.sql` có đúng 52 TAP (`plan(52)`), cả database job và job lint/type-check/test/build đều thành công. Chưa `db push`; chờ người dùng đọc migration và kiểm tra tay.
+- **CI nhánh tiếp quản:** workflow nhận push từ `agents/project-takeover-review-map`; ba commit WIP đã push. Run #74 in đủ A01–A52/`ok 1`–`ok 52`, cùng M6 `ok 1`–`ok 63`.
 - **M5:** CI **xanh** (người dùng xác nhận) và migration `20261009150000_m5_review_writes.sql` **đã `db push`** lên cloud (người dùng xác nhận). Bốn lệnh local pass trên `765361e`.
 - **M5 — DoD:** **chờ kiểm tra tay**. Checklist 11 bước ở mục 5.2 chưa được người dùng xác nhận, nên DoD M5 **chưa được tick** (`[~]` trong mục 2).
 - **M4 và trước đó:** M0–M4 xong (M3/M4 CI xanh, migration đã push theo xác nhận của người dùng).
@@ -33,16 +33,16 @@
 
 - **Việc:** M6 — thêm quán bằng ghim, kiểm tra trùng, báo cáo quán; đồng thời sửa thiếu một assertion trong test quyền/RLS tổng hợp `01`.
 - **File liên quan:** `supabase/migrations/20261010090000_m6_restaurant_creation_and_reports.sql`, `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(63)`), `supabase/tests/01_rls_test.sql` (`plan(52)`), `.github/workflows/ci.yml`, `src/features/restaurants/components/AddRestaurantFlow.tsx`, `src/features/map/components/MapComponent.tsx`, `src/messages/{vi,en}.json`, `docs/{SECURITY-TESTS,PROGRESS}.md`.
-- **Dở ở chỗ nào / vì sao dừng:** CI run #73 áp dụng migration thành công và chạy tất cả DB tests, nhưng 01 báo `planned 52 tests but ran 51` (51 pass). Marker A22 chỉ có `diag()`, không có assertion; đã thêm kiểm tra privileged read-back chứng minh quota không tạo quán thứ 6. Step diagnostic đã chạy sau test failure (`if: always()`), nhưng grep neo `ok` ở cột đầu trong khi psql căn lề; đã thêm bước trim khoảng trắng. Máy này không có Docker nên chưa thể chạy lại pgTAP. Còn cần CI chứng minh đủ 52/52, kiểm thử DB M6 (10 khai `plan(63)`), và `db push` do người dùng thực hiện.
+- **Dở ở chỗ nào / vì sao dừng:** Run #73 thiếu một TAP vì A22 chỉ có `diag()`; A22 nay kiểm tra bằng privileged read-back rằng quota không tạo quán thứ 6, không đổi `plan(52)`. Raw diagnostic trim khoảng trắng; run #74 đã xác nhận A01–A52/52 TAP và M6 `10`/63 TAP, `Files=10, Tests=192`, toàn bộ CI xanh. Không có Docker nên SQL được kiểm chứng qua GitHub Actions, không chạy local. Chờ người dùng đọc migration, tự `db push`, rồi kiểm tra tay mục 5.3; không tiến sang M7.
 - **Lỗi map style:** cả `MapComponent` và `AddRestaurantFlow` dùng chung style URL nên đều được gắn `onError`; chỉ ghi chuỗi cố định `Map style load failed`, không log object lỗi/URL, đồng thời hiển thị thông báo i18n thân thiện.
 - **Kiểm tra local lượt này:** `npm run lint`, `npx tsc --noEmit --incremental false`, `npm test`, `npm run build` đã thử nhưng không chạy thành công do dependency trong `node_modules` thiếu/sai file sau `npm install` (Zod/Supabase/MapLibre typings, Rolldown binding) và Next SWC không hợp lệ cho Windows. `npm run build -- --webpack` cũng dừng vì thiếu file phát hành của MapLibre/Zod. Không thể coi các kết quả này là kiểm chứng xanh; chưa tự kiểm chứng SQL trên máy local.
-- **Có commit `wip:` chưa:** Không (đã commit đầy đủ).
+- **Commit:** ba commit `wip:` riêng cho SQL/diagnostic, xử lý lỗi MapLibre và push trigger; đã push nhánh `agents/project-takeover-review-map`.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Người dùng quyết định cách kích hoạt CI: nhánh hiện tại trùng `origin/main`, nhưng workflow chỉ chạy sự kiện push trên `main` và pull_request; chưa push nhánh feature vì một push vào `agents/project-takeover-review-map` sẽ không tạo run.
-2. Sau khi CI được kích hoạt, kiểm tra step raw TAP in đủ `ok 1`…`ok 52`, kết quả database toàn xanh và đọc `diag()` M6; không đổi plan để né lỗi.
-3. Khi job database xanh, người dùng kiểm tra tay M6 mục 5.3 và tự `supabase db push`; kiểm tra tay M5 mục 5.2 vẫn chờ. **Không sang M7.**
+1. Người dùng đọc toàn bộ migration `20261010090000_m6_restaurant_creation_and_reports.sql` và checklist kiểm tra tay M6 mục 5.3 bên dưới.
+2. Sau khi người dùng xác nhận, người dùng tự chạy `supabase db push`; agent không đẩy migration.
+3. Người dùng thực hiện kiểm tra tay M6 mục 5.3 rồi xác nhận; checklist M5 mục 5.2 vẫn chờ. **Không sang M7.**
 
 ### 3.1. Hai file agent trước để dở và cách xử lý
 
@@ -246,9 +246,9 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-09 | DeepSeek Harness | Vòng 3 sau log CI thứ hai (Files=9, Tests=118, còn 3 lỗi): thêm `diag()` mốc giá trị cho T24 của `01` (không đổi hằng số kỳ vọng); `plan(13)`→`plan(14)` cho `08` kèm giải thích test thứ 14 là assertion cascade hợp lệ; tách M5-15 của `09` thành `lives_ok` + M5-16 đọc `helpful_count` bằng `postgres` (NULL do RLS chỉ cho thấy hàng của chính mình). Bốn lệnh local pass; chờ CI. | `59af17c` |
 | 2026-10-09 | DeepSeek Harness | Vòng 4: sửa T24/T25 của `01` sang so sánh trước/sau bằng temp table (bằng chứng CI cho thấy quán 444 đúng là 4.50/2 do trigger M5 tính từ 2 review fixture, không phải 0/0); `09` plan khai dư từ lúc tạo file (14 assertion nhưng `plan(16)`, nhãn bắt đầu ở M5-02) → đánh số lại tuần tự M5-01…M5-15 và `plan(15)`. Xác nhận 0 hàng `reviews` dưới `authenticated` là chủ đích theo SPEC §7.1. Bốn lệnh local pass; chờ CI. | `765361e` |
 | 2026-10-10 | DeepSeek Harness | M5 CI xanh + đã `db push` (người dùng xác nhận); DoD M5 vẫn chờ checklist tay 11 bước. Bắt đầu M6: rà quyền cột `restaurants` (thu hồi SELECT `created_by`), migration `20261010090000` (create_restaurant, find/check_duplicate_restaurant, report_restaurant + trigger ngưỡng, ràng buộc toạ độ), pgTAP `10` (`plan(43)`, nhãn M6-01…M6-43), giao diện ghim/thêm quán/báo cáo + i18n vi/en + 5 unit test schema. Bốn lệnh local pass; chờ CI. Không `db push`, không mở PR mutation, chưa sang M7. | (commit M6) |
-| 2026-10-11 | Copilot | M6 CI follow-up: run #73 xác nhận A22 chỉ có `diag()` nên thiếu 1 TAP; thêm kiểm tra quota không tạo quán thứ 6, giữ `plan(52)`, sửa raw diagnostic xử lý khoảng trắng. Đã rà các subquery/DO/PERFORM và ghi bằng chứng tại `SECURITY-TESTS.md`; chờ CI mới. | wip commit; chưa push |
-| 2026-10-11 | Copilot | Map style follow-up: cả hai `<Map>` dùng `onError`, chỉ log chuỗi cố định và hiển thị lỗi thân thiện i18n; không đọc hay ghi log error object/style URL. | wip commit; chưa push |
-| 2026-10-11 | Copilot | Mở rộng push trigger CI cho nhánh tiếp quản sau khi xác nhận nhánh không được bao phủ trước đó. | wip commit; chưa push |
+| 2026-10-11 | Copilot | M6 CI follow-up: run #73 xác nhận A22 chỉ có `diag()` nên thiếu 1 TAP; thêm kiểm tra quota không tạo quán thứ 6, giữ `plan(52)`, sửa raw diagnostic xử lý khoảng trắng. Đã rà các subquery/DO/PERFORM và ghi bằng chứng tại `SECURITY-TESTS.md`. Run #74 xác nhận `Files=10, Tests=192`, raw TAP `01` 52/52 và `10` 63/63; cả database lẫn lint/type-check/test/build xanh. | `482d7b4`, `37be5fc` |
+| 2026-10-11 | Copilot | Map style follow-up: cả hai `<Map>` dùng `onError`, chỉ log chuỗi cố định và hiển thị lỗi thân thiện i18n; không đọc hay ghi log error object/style URL. | `5b385af` |
+| 2026-10-11 | Copilot | Mở rộng push trigger CI cho nhánh tiếp quản sau khi xác nhận nhánh không được bao phủ trước đó; push và run #74 đã thành công. | `37be5fc` |
 
 ## 10. Những gì đã đổi về quyền hệ thống ở lượt trước (để đối chiếu, KHÔNG lặp lại)
 
