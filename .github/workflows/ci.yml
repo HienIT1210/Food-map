@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, agents/project-takeover-review-map]
   pull_request:
 
 jobs:

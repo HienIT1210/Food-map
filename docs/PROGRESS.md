@@ -2,13 +2,14 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-11 bởi Copilot (đã tìm thấy assertion A22 bị thiếu; chờ CI trên nhánh có trigger)
+**Cập nhật lần cuối:** 2026-10-11 bởi Copilot (đã tìm thấy assertion A22 bị thiếu; bật push trigger cho nhánh tiếp quản, chờ CI)
 
 ---
 
 ## 1. Trạng thái hiện tại
 
 - **Milestone hiện tại:** M6 — Thêm quán bằng ghim, kiểm tra trùng, báo "đóng cửa/sai vị trí" (RES-02, RES-03, RES-04, §6.9, §7.1, §7.3). Code + migration + test đã viết; CI gần nhất áp dụng migration thành công nhưng job database đỏ do `01_rls_test.sql` khai `plan(52)` và chỉ chạy 51 assertion. Đã xác định assertion thiếu là A22, bổ sung kiểm tra quota và giữ `plan(52)`; chưa có CI xác nhận bản sửa, chưa `db push`.
+- **CI nhánh tiếp quản:** workflow giờ nhận push từ `agents/project-takeover-review-map`; hai commit sửa lỗi đang chờ push và CI.
 - **M5:** CI **xanh** (người dùng xác nhận) và migration `20261009150000_m5_review_writes.sql` **đã `db push`** lên cloud (người dùng xác nhận). Bốn lệnh local pass trên `765361e`.
 - **M5 — DoD:** **chờ kiểm tra tay**. Checklist 11 bước ở mục 5.2 chưa được người dùng xác nhận, nên DoD M5 **chưa được tick** (`[~]` trong mục 2).
 - **M4 và trước đó:** M0–M4 xong (M3/M4 CI xanh, migration đã push theo xác nhận của người dùng).
@@ -247,6 +248,7 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-10 | DeepSeek Harness | M5 CI xanh + đã `db push` (người dùng xác nhận); DoD M5 vẫn chờ checklist tay 11 bước. Bắt đầu M6: rà quyền cột `restaurants` (thu hồi SELECT `created_by`), migration `20261010090000` (create_restaurant, find/check_duplicate_restaurant, report_restaurant + trigger ngưỡng, ràng buộc toạ độ), pgTAP `10` (`plan(43)`, nhãn M6-01…M6-43), giao diện ghim/thêm quán/báo cáo + i18n vi/en + 5 unit test schema. Bốn lệnh local pass; chờ CI. Không `db push`, không mở PR mutation, chưa sang M7. | (commit M6) |
 | 2026-10-11 | Copilot | M6 CI follow-up: run #73 xác nhận A22 chỉ có `diag()` nên thiếu 1 TAP; thêm kiểm tra quota không tạo quán thứ 6, giữ `plan(52)`, sửa raw diagnostic xử lý khoảng trắng. Đã rà các subquery/DO/PERFORM và ghi bằng chứng tại `SECURITY-TESTS.md`; chờ CI mới. | wip commit; chưa push |
 | 2026-10-11 | Copilot | Map style follow-up: cả hai `<Map>` dùng `onError`, chỉ log chuỗi cố định và hiển thị lỗi thân thiện i18n; không đọc hay ghi log error object/style URL. | wip commit; chưa push |
+| 2026-10-11 | Copilot | Mở rộng push trigger CI cho nhánh tiếp quản sau khi xác nhận nhánh không được bao phủ trước đó. | wip commit; chưa push |
 
 ## 10. Những gì đã đổi về quyền hệ thống ở lượt trước (để đối chiếu, KHÔNG lặp lại)
 
