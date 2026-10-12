@@ -7,8 +7,8 @@ import {
   type MapFilters,
 } from "../map-utils";
 
-const restaurantPinSchema = z.object({
-  id: z.string().uuid(),
+export const restaurantPinSchema = z.object({
+  id: z.string().guid(),
   name: z.string(),
   lat: z.coerce.number(),
   lng: z.coerce.number(),

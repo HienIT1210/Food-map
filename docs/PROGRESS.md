@@ -35,15 +35,15 @@
 - **File liên quan:** `supabase/migrations/20261010090000_m6_restaurant_creation_and_reports.sql`, `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(63)`), `supabase/tests/01_rls_test.sql` (`plan(52)`), `.github/workflows/ci.yml`, `src/features/restaurants/components/AddRestaurantFlow.tsx`, `src/features/map/components/MapComponent.tsx`, `src/messages/{vi,en}.json`, `docs/{SECURITY-TESTS,PROGRESS}.md`.
 - **Dở ở chỗ nào / vì sao dừng:** Run #73 thiếu một TAP vì A22 chỉ có `diag()`; A22 nay kiểm tra bằng privileged read-back rằng quota không tạo quán thứ 6, không đổi `plan(52)`. Raw diagnostic trim khoảng trắng; run #75 xác nhận A01–A52/52 TAP và M6 `10`/63 TAP, `Files=10, Tests=192`, toàn bộ CI xanh. Không có Docker nên SQL được kiểm chứng qua GitHub Actions, không chạy local. Chờ người dùng đọc migration, tự `db push`, rồi kiểm tra tay mục 5.3; không tiến sang M7.
 - **Lỗi map style:** cả `MapComponent` và `AddRestaurantFlow` dùng chung style URL nên đều được gắn `onError`; chỉ ghi chuỗi cố định `Map style load failed`, không log object lỗi/URL, đồng thời hiển thị thông báo i18n thân thiện.
-- **Lỗi tải trang chi tiết quán (2026-10-12):** `RestaurantDetail` dùng `Promise.all` gọi hai repository với chung một `AbortSignal`; không dùng TanStack Query nên không có `enabled`/`queryKey`. Next App Router bật Strict Mode trong dev; `queueMicrotask` và cờ hủy ngăn effect bị cleanup trước khi chạy gửi request. Test tích hợp render trong Strict Mode chứng minh response RPC dạng array, `avg_rating`/tọa độ dạng chuỗi số và `dish` lồng dạng object được parse/render bình thường, mỗi endpoint chỉ gọi một lần. Vì vậy payload được mô tả chưa tái hiện lỗi; chưa thể quy kết mismatch cụ thể. Catch nay log tên lỗi và Zod path/code/message nhưng không log error object hay giá trị input, để chẩn đoán nếu payload runtime khác.
-- **Kiểm tra local:** `npm run lint` pass; `npx tsc --noEmit` pass sau khi thay các gói declaration/native bị thiếu/hỏng trong `node_modules`; `npm test` pass (10 files, 25 tests); `npm run build` pass. Manifest/lockfile không đổi. Database được kiểm chứng ở CI run #75; không chạy SQL local vì máy không có Docker.
-- **Commit:** các commit M6 trước đó đã push; thay đổi chẩn đoán trang chi tiết hiện ở phiên này.
+- **Lỗi tải trang chi tiết quán (2026-10-12):** nguyên nhân đã xác định qua log do người dùng cung cấp: Zod 4 `.uuid()` từ chối ID UUID hợp lệ theo kiểu cột PostgreSQL nếu không có version/variant RFC (path thực tế `0.dish.id`, giá trị dạng `d222...`). Integration test trước dùng ID RFC nên không tái hiện. Đổi các schema ID từ server/database trong restaurants, reviews, auth, map và ID route sang `.guid()`; giữ nguyên mọi ràng buộc payload khác. Đã sửa fixture integration sang restaurant `dddd...` và dish `d222...`: test thất bại trước sửa (`invalid_format`, `0.id`), xanh sau sửa. Test schema/repository xác nhận seed GUID ở chi tiết/tìm kiếm/món/trùng/quán mới, public review/My Reviews, hồ sơ và map pin. Strict Mode không gây request lặp; vẫn dùng chung AbortSignal, không có TanStack Query.
+- **Kiểm tra local:** sau sửa GUID, `npm run lint` pass; `npx tsc --noEmit` pass; `npm test` pass (13 files, 34 tests); `npm run build` pass. Nhóm test mục tiêu trước đó cũng pass (7 files, 23 tests). Manifest/lockfile không đổi. Không chạy SQL local vì máy không có Docker; thay đổi này không sửa database.
+- **Commit:** thay đổi chẩn đoán trang chi tiết đã có trong commit `546e3a0`; sửa GUID và test hồi quy hiện chưa commit/chưa push.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Nếu trang chi tiết còn hiện lỗi, đối chiếu log an toàn mới (tên lỗi/Zod path/code/message; không gửi giá trị response) để xác định phần runtime khác với payload mô tả.
-2. Chỉ sửa schema/repository khi diagnostic chỉ ra mismatch thực tế; giữ validation chặt và thêm regression test cho payload gây lỗi.
-3. M6 vẫn chờ người dùng đọc migration, tự `supabase db push` và chạy checklist mục 5.3; **không sang M7**.
+1. Chạy đủ lint, type-check, Vitest và build cho sửa GUID; commit/push rồi xác nhận CI.
+2. Nếu CI xanh, dán migration M6 để người dùng đọc và liệt kê checklist kiểm tay mục 5.3; không chạy `supabase db push`.
+3. Chỉ sau xác nhận người dùng và hoàn thành DoD M6 mới tiếp tục M7; không vượt milestone.
 
 ### 3.1. Hai file agent trước để dở và cách xử lý
 

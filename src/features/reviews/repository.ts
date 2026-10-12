@@ -30,7 +30,7 @@ export async function getMyReview(restaurantId: string, dishId: string | null): 
   });
   if (error) throw new Error(error.message);
   const rows = z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     rating: z.number().int().min(1).max(5),
     content: z.string().nullable(),
     is_anonymous: z.boolean(),
@@ -48,10 +48,10 @@ export async function listMyReviews(): Promise<z.infer<typeof ownReviewSchema>[]
 export async function saveReview(draft: ReviewDraft): Promise<string> {
   const parsed = z.object({
     rating: z.number().int().min(1).max(5),
-    restaurantId: z.string().uuid(),
+    restaurantId: z.string().guid(),
     content: z.string().max(2000),
     isAnonymous: z.boolean(),
-    dishId: z.string().uuid().nullable(),
+    dishId: z.string().guid().nullable(),
   }).strict().parse(draft);
   const supabase = createClient();
   const { data, error } = await supabase.rpc("save_review", {
@@ -62,7 +62,7 @@ export async function saveReview(draft: ReviewDraft): Promise<string> {
     p_is_anonymous: parsed.isAnonymous,
   });
   if (error) throw new Error(error.message);
-  return z.string().uuid().parse(data);
+  return z.string().guid().parse(data);
 }
 
 export async function uploadReviewPhotos(reviewId: string, files: File[]): Promise<void> {
@@ -93,7 +93,7 @@ export async function removeReview(reviewId: string): Promise<void> {
   const { data, error } = await supabase.rpc("delete_review", { p_review_id: reviewId });
   if (error) throw new Error(error.message);
   const rows = z.array(z.object({
-    deleted_review_id: z.string().uuid(),
+    deleted_review_id: z.string().guid(),
     storage_paths: z.array(z.string()).nullable(),
   }).strict()).parse(data ?? []);
   const deleted = rows[0];

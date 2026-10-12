@@ -4,7 +4,7 @@ import { ProfileSchema, UpdateProfileInputSchema, EmailAuthInputSchema } from ".
 describe("Auth & Profile Schemas (M2)", () => {
   it("ProfileSchema validate đúng profile hợp lệ", () => {
     const validProfile = {
-      id: "a0000000-0000-4000-8000-000000000001",
+      id: "dddd4444-4444-4444-4444-444444444444",
       display_name: "Nguyen Van A",
       avatar_url: "https://example.com/avatar.jpg",
       role: "user",

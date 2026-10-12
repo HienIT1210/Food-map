@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const restaurantDetailsSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   name: z.string(),
   address: z.string().nullable(),
   province: z.string().nullable(),
@@ -12,7 +12,7 @@ export const restaurantDetailsSchema = z.object({
 });
 
 export const restaurantSearchResultSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   name: z.string(),
   address: z.string().nullable(),
   avg_rating: z.coerce.number(),
@@ -22,14 +22,14 @@ export const restaurantSearchResultSchema = z.object({
 });
 
 export const restaurantDishSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   name: z.string(),
   priceVnd: z.number().int().nonnegative().nullable(),
 });
 
 // M6: a server-side duplicate candidate. created_by is deliberately absent; the RPC never returns it.
 export const duplicateRestaurantSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   name: z.string(),
   address: z.string().nullable(),
   distance_meters: z.coerce.number().nonnegative(),
@@ -44,7 +44,7 @@ export const createRestaurantInputSchema = z.object({
   lat: z.number().min(-90, "lat-range").max(90, "lat-range"),
   lng: z.number().min(-180, "lng-range").max(180, "lng-range"),
   dishes: z
-    .array(z.object({ dish_id: z.string().uuid(), price_vnd: z.number().int().nonnegative().nullable() }))
+    .array(z.object({ dish_id: z.string().guid(), price_vnd: z.number().int().nonnegative().nullable() }))
     .max(10, "too-many-dishes")
     .default([]),
   confirmNew: z.boolean().default(false),

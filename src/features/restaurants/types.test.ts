@@ -2,11 +2,54 @@ import { describe, expect, it } from "vitest";
 import {
   createRestaurantInputSchema,
   duplicateRestaurantSchema,
+  restaurantDetailsSchema,
+  restaurantDishSchema,
   restaurantReportReasonSchema,
+  restaurantSearchResultSchema,
 } from "./types";
 
 const invalidLat = 91;
 const invalidLng = 200;
+const restaurantId = "dddd4444-4444-4444-4444-444444444444";
+const dishId = "d2222222-2222-2222-2222-222222222222";
+
+describe("restaurant server response schemas", () => {
+  it("accepts PostgreSQL UUIDs from seed data in detail, search, and dish responses", () => {
+    expect(restaurantDetailsSchema.parse({
+      id: restaurantId,
+      name: "Quán seed",
+      address: null,
+      province: "Hà Nội",
+      avg_rating: "4.5",
+      review_count: 2,
+      lat: "21.02",
+      lng: "105.8",
+    }).id).toBe(restaurantId);
+    expect(restaurantSearchResultSchema.parse({
+      id: restaurantId,
+      name: "Quán seed",
+      address: null,
+      avg_rating: 4.5,
+      review_count: 2,
+      lat: 21.02,
+      lng: 105.8,
+    }).id).toBe(restaurantId);
+    expect(restaurantDishSchema.parse({
+      id: dishId,
+      name: "Cơm Tấm",
+      priceVnd: 50000,
+    }).id).toBe(dishId);
+  });
+
+  it("accepts a seed dish ID in the restaurant creation payload", () => {
+    expect(createRestaurantInputSchema.parse({
+      name: "Quán mới",
+      lat: 21.02,
+      lng: 105.8,
+      dishes: [{ dish_id: dishId, price_vnd: 50000 }],
+    }).dishes[0].dish_id).toBe(dishId);
+  });
+});
 
 describe("M6 create-restaurant input", () => {
   it("accepts the fields the RPC takes and nothing that grants server-managed state", () => {
@@ -61,14 +104,14 @@ describe("M6 create-restaurant input", () => {
 describe("M6 duplicate candidate", () => {
   it("carries no identity field and requires a numeric distance", () => {
     const parsed = duplicateRestaurantSchema.parse({
-      id: "a6060000-0000-4000-8000-000000000010",
+      id: restaurantId,
       name: "M6 Bún",
       address: null,
       distance_meters: "12.5",
     });
     expect(parsed.distance_meters).toBe(12.5);
     expect(Object.keys(parsed)).not.toContain("created_by");
-    expect(duplicateRestaurantSchema.safeParse({ id: "a6060000-0000-4000-8000-000000000010", name: "x", address: null }).success).toBe(false);
+    expect(duplicateRestaurantSchema.safeParse({ id: restaurantId, name: "x", address: null }).success).toBe(false);
   });
 });
 

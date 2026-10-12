@@ -4,9 +4,9 @@ export const reviewSortSchema = z.enum(["newest", "helpful", "rating_high", "rat
 export type ReviewSort = z.infer<typeof reviewSortSchema>;
 
 export const publicReviewSchema = z.object({
-  id: z.string().uuid(),
-  restaurant_id: z.string().uuid(),
-  dish_id: z.string().uuid().nullable(),
+  id: z.string().guid(),
+  restaurant_id: z.string().guid(),
+  dish_id: z.string().guid().nullable(),
   rating: z.number().int().min(1).max(5),
   content: z.string().nullable(),
   is_anonymous: z.boolean(),
@@ -26,10 +26,10 @@ export type ReviewPage = {
 };
 
 export const ownReviewSchema = z.object({
-  id: z.string().uuid(),
-  restaurant_id: z.string().uuid(),
+  id: z.string().guid(),
+  restaurant_id: z.string().guid(),
   restaurant_name: z.string(),
-  dish_id: z.string().uuid().nullable(),
+  dish_id: z.string().guid().nullable(),
   rating: z.number().int().min(1).max(5),
   content: z.string().nullable(),
   is_anonymous: z.boolean(),

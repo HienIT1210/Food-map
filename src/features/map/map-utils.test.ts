@@ -5,6 +5,7 @@ import {
   hasMovedOutsideLoadedBounds,
   type MapBounds,
 } from "./map-utils";
+import { restaurantPinSchema } from "./hooks/useRestaurantsInBounds";
 
 const loadedBounds: MapBounds = {
   minLat: 10,
@@ -14,6 +15,20 @@ const loadedBounds: MapBounds = {
 };
 
 describe("map request helpers", () => {
+  it("accepts PostgreSQL UUIDs from seed data in map pin responses", () => {
+    expect(restaurantPinSchema.parse({
+      id: "dddd4444-4444-4444-4444-444444444444",
+      name: "Quán seed",
+      lat: "21.02",
+      lng: "105.8",
+      avg_rating: "4.5",
+      review_count: 2,
+      status: "active",
+      province: "Hà Nội",
+      dish_types: ["Cơm"],
+    }).id).toBe("dddd4444-4444-4444-4444-444444444444");
+  });
+
   it("sends only active filters to restaurants_in_bounds", () => {
     expect(
       buildRestaurantRpcFilters({

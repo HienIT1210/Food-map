@@ -17,7 +17,7 @@ import {
 
 const restaurantDishesSchema = z.array(z.object({
   price_vnd: z.number().int().nonnegative().nullable(),
-  dish: z.union([z.object({ id: z.string().uuid(), name: z.string() }), z.array(z.object({ id: z.string().uuid(), name: z.string() }))]).nullable(),
+  dish: z.union([z.object({ id: z.string().guid(), name: z.string() }), z.array(z.object({ id: z.string().guid(), name: z.string() }))]).nullable(),
 }));
 
 function throwIfError(error: { message: string } | null): void {
@@ -78,7 +78,7 @@ export async function createRestaurant(input: CreateRestaurantInput): Promise<st
   });
   const mapped = writeError(error);
   if (mapped) throw mapped;
-  return z.string().uuid().parse(data);
+  return z.string().guid().parse(data);
 }
 
 export async function reportRestaurant(

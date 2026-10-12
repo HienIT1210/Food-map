@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const ProfileSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   display_name: z.string().min(1, "Tên hiển thị không được để trống").max(50, "Tên quá dài"),
   avatar_url: z.string().nullable().optional(),
   role: z.enum(["user", "admin"]).default("user"),

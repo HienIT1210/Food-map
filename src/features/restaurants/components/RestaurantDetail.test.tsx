@@ -40,8 +40,8 @@ vi.mock("./RestaurantReport", () => ({
   RestaurantReport: () => null,
 }));
 
-const restaurantId = "a6060000-0000-4000-8000-000000000001";
-const dishId = "a6060000-0000-4000-8000-000000000002";
+const restaurantId = "dddd4444-4444-4444-4444-444444444444";
+const dishId = "d2222222-2222-2222-2222-222222222222";
 const restaurantResponse = [{
   id: restaurantId,
   name: "Quán thử",

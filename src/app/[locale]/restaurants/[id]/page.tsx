@@ -10,6 +10,6 @@ type RestaurantPageProps = {
 export default async function RestaurantPage({ params }: RestaurantPageProps) {
   const { locale, id } = await params;
   setRequestLocale(locale);
-  if (!z.string().uuid().safeParse(id).success) notFound();
+  if (!z.string().guid().safeParse(id).success) notFound();
   return <RestaurantDetail restaurantId={id} />;
 }
