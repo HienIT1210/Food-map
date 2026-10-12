@@ -3,10 +3,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { useFormatter, useTranslations } from "next-intl";
+import { ZodError } from "zod";
 import { getRestaurantDetails, getRestaurantDishes } from "../repository";
 import type { RestaurantDetails, RestaurantDish } from "../types";
 import { ReviewList } from "@/features/reviews/components/ReviewList";
 import { RestaurantReport } from "./RestaurantReport";
+
+function logRestaurantLoadError(error: unknown): void {
+  if (error instanceof ZodError) {
+    console.error("Restaurant detail load failed", {
+      name: error.name,
+      issues: error.issues.map(({ path, code, message }) => ({
+        path: path.map(String).join("."),
+        code,
+        message,
+      })),
+    });
+    return;
+  }
+
+  console.error("Restaurant detail load failed", {
+    name: error instanceof Error ? error.name : "UnknownError",
+  });
+}
 
 function directionsUrl(lat: number, lng: number): string {
   return "https://www.google.com/maps/dir/?api=1&destination=" + lat + "," + lng;
@@ -37,7 +56,8 @@ export function RestaurantDetail({ restaurantId }: { restaurantId: string }) {
       if (signal.aborted) return;
       setRestaurant(detail);
       setDishes(menu);
-    } catch {
+    } catch (loadError: unknown) {
+      logRestaurantLoadError(loadError);
       if (!signal.aborted) setError(true);
     } finally {
       if (!signal.aborted) setLoading(false);

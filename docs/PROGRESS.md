@@ -2,14 +2,14 @@
 
 > Mọi agent phải đọc file này đầu phiên và cập nhật cuối mỗi bước nhỏ. Nếu file này mâu thuẫn với code/git thì tin code/git và sửa file này.
 
-**Cập nhật lần cuối:** 2026-10-11 bởi Copilot (run #74 xanh; 01 có 52/52 TAP, chờ người dùng duyệt migration M6)
+**Cập nhật lần cuối:** 2026-10-12 bởi Copilot (run #75 xanh; kiểm tra lỗi tải trang chi tiết quán)
 
 ---
 
 ## 1. Trạng thái hiện tại
 
-- **Milestone hiện tại:** M6 — Thêm quán bằng ghim, kiểm tra trùng, báo "đóng cửa/sai vị trí" (RES-02, RES-03, RES-04, §6.9, §7.1, §7.3). Run #74 xanh: `01_rls_test.sql` có đúng 52 TAP (`plan(52)`), cả database job và job lint/type-check/test/build đều thành công. Chưa `db push`; chờ người dùng đọc migration và kiểm tra tay.
-- **CI nhánh tiếp quản:** workflow nhận push từ `agents/project-takeover-review-map`; ba commit WIP đã push. Run #74 in đủ A01–A52/`ok 1`–`ok 52`, cùng M6 `ok 1`–`ok 63`.
+- **Milestone hiện tại:** M6 — Thêm quán bằng ghim, kiểm tra trùng, báo "đóng cửa/sai vị trí" (RES-02, RES-03, RES-04, §6.9, §7.1, §7.3). Run #75 xanh: `01_rls_test.sql` có đúng 52 TAP (`plan(52)`), M6 test có 63/63; cả database và job lint/type-check/test/build đều thành công. Chưa `db push`; chờ người dùng đọc migration và kiểm tra tay.
+- **CI nhánh tiếp quản:** workflow nhận push từ `agents/project-takeover-review-map`; các commit đã push. Run #75 xác nhận A01–A52/`ok 1`–`ok 52`, M6 `ok 1`–`ok 63`.
 - **M5:** CI **xanh** (người dùng xác nhận) và migration `20261009150000_m5_review_writes.sql` **đã `db push`** lên cloud (người dùng xác nhận). Bốn lệnh local pass trên `765361e`.
 - **M5 — DoD:** **chờ kiểm tra tay**. Checklist 11 bước ở mục 5.2 chưa được người dùng xác nhận, nên DoD M5 **chưa được tick** (`[~]` trong mục 2).
 - **M4 và trước đó:** M0–M4 xong (M3/M4 CI xanh, migration đã push theo xác nhận của người dùng).
@@ -24,25 +24,26 @@
 - [x] M3 — MapLibre, vị trí, tải vùng, clustering, thẻ, bộ lọc và list (người dùng xác nhận đã xong)
 - [x] M4 — Tìm kiếm có/không dấu, chi tiết quán, danh sách review; CI xanh, migration đã `db push`; checklist UI thủ công còn chờ
 - [~] M5 — CI **xanh** + migration **đã `db push`**; **chờ kiểm tra tay 11 bước ở mục 5.2** thì mới tick DoD
-- [~] M6 — Code/migration/test xong (`20261010090000`, pgTAP `10` khai `plan(63)`, UI ghim + form + kiểm trùng + báo cáo); **chờ CI xanh + `db push` + kiểm tra tay mục 5.3**
+- [~] M6 — Code/migration/test xong (`20261010090000`, pgTAP `10` khai `plan(63)`, UI ghim + form + kiểm trùng + báo cáo); **CI xanh, chờ `db push` + kiểm tra tay mục 5.3**
 - [ ] M7 — Chỉ đường, lưu quán, chia sẻ
 - [ ] M8 — Báo cáo, chặn, kiểm duyệt, trang quản trị, pháp lý
 - [ ] M9 — PWA hoàn chỉnh, E2E, tối ưu, triển khai
 
 ## 3. Đang làm dở (QUAN TRỌNG cho agent tiếp quản)
 
-- **Việc:** M6 — thêm quán bằng ghim, kiểm tra trùng, báo cáo quán; đồng thời sửa thiếu một assertion trong test quyền/RLS tổng hợp `01`.
+- **Việc:** M6 — thêm quán bằng ghim, kiểm tra trùng, báo cáo quán; hiện đồng thời xử lý báo lỗi tải trang chi tiết quán.
 - **File liên quan:** `supabase/migrations/20261010090000_m6_restaurant_creation_and_reports.sql`, `supabase/tests/10_m6_restaurant_creation_test.sql` (`plan(63)`), `supabase/tests/01_rls_test.sql` (`plan(52)`), `.github/workflows/ci.yml`, `src/features/restaurants/components/AddRestaurantFlow.tsx`, `src/features/map/components/MapComponent.tsx`, `src/messages/{vi,en}.json`, `docs/{SECURITY-TESTS,PROGRESS}.md`.
-- **Dở ở chỗ nào / vì sao dừng:** Run #73 thiếu một TAP vì A22 chỉ có `diag()`; A22 nay kiểm tra bằng privileged read-back rằng quota không tạo quán thứ 6, không đổi `plan(52)`. Raw diagnostic trim khoảng trắng; run #74 đã xác nhận A01–A52/52 TAP và M6 `10`/63 TAP, `Files=10, Tests=192`, toàn bộ CI xanh. Không có Docker nên SQL được kiểm chứng qua GitHub Actions, không chạy local. Chờ người dùng đọc migration, tự `db push`, rồi kiểm tra tay mục 5.3; không tiến sang M7.
+- **Dở ở chỗ nào / vì sao dừng:** Run #73 thiếu một TAP vì A22 chỉ có `diag()`; A22 nay kiểm tra bằng privileged read-back rằng quota không tạo quán thứ 6, không đổi `plan(52)`. Raw diagnostic trim khoảng trắng; run #75 xác nhận A01–A52/52 TAP và M6 `10`/63 TAP, `Files=10, Tests=192`, toàn bộ CI xanh. Không có Docker nên SQL được kiểm chứng qua GitHub Actions, không chạy local. Chờ người dùng đọc migration, tự `db push`, rồi kiểm tra tay mục 5.3; không tiến sang M7.
 - **Lỗi map style:** cả `MapComponent` và `AddRestaurantFlow` dùng chung style URL nên đều được gắn `onError`; chỉ ghi chuỗi cố định `Map style load failed`, không log object lỗi/URL, đồng thời hiển thị thông báo i18n thân thiện.
-- **Kiểm tra local lượt này:** `npm run lint`, `npx tsc --noEmit --incremental false`, `npm test`, `npm run build` đã thử nhưng không chạy thành công do dependency trong `node_modules` thiếu/sai file sau `npm install` (Zod/Supabase/MapLibre typings, Rolldown binding) và Next SWC không hợp lệ cho Windows. `npm run build -- --webpack` cũng dừng vì thiếu file phát hành của MapLibre/Zod. Không thể coi các kết quả này là kiểm chứng xanh; chưa tự kiểm chứng SQL trên máy local.
-- **Commit:** ba commit `wip:` riêng cho SQL/diagnostic, xử lý lỗi MapLibre và push trigger; đã push nhánh `agents/project-takeover-review-map`.
+- **Lỗi tải trang chi tiết quán (2026-10-12):** `RestaurantDetail` dùng `Promise.all` gọi hai repository với chung một `AbortSignal`; không dùng TanStack Query nên không có `enabled`/`queryKey`. Next App Router bật Strict Mode trong dev; `queueMicrotask` và cờ hủy ngăn effect bị cleanup trước khi chạy gửi request. Test tích hợp render trong Strict Mode chứng minh response RPC dạng array, `avg_rating`/tọa độ dạng chuỗi số và `dish` lồng dạng object được parse/render bình thường, mỗi endpoint chỉ gọi một lần. Vì vậy payload được mô tả chưa tái hiện lỗi; chưa thể quy kết mismatch cụ thể. Catch nay log tên lỗi và Zod path/code/message nhưng không log error object hay giá trị input, để chẩn đoán nếu payload runtime khác.
+- **Kiểm tra local:** `npm run lint` pass; `npx tsc --noEmit` pass sau khi thay các gói declaration/native bị thiếu/hỏng trong `node_modules`; `npm test` pass (10 files, 25 tests); `npm run build` pass. Manifest/lockfile không đổi. Database được kiểm chứng ở CI run #75; không chạy SQL local vì máy không có Docker.
+- **Commit:** các commit M6 trước đó đã push; thay đổi chẩn đoán trang chi tiết hiện ở phiên này.
 
 ## 4. Bước tiếp theo (3 việc cụ thể, theo thứ tự)
 
-1. Người dùng đọc toàn bộ migration `20261010090000_m6_restaurant_creation_and_reports.sql` và checklist kiểm tra tay M6 mục 5.3 bên dưới.
-2. Sau khi người dùng xác nhận, người dùng tự chạy `supabase db push`; agent không đẩy migration.
-3. Người dùng thực hiện kiểm tra tay M6 mục 5.3 rồi xác nhận; checklist M5 mục 5.2 vẫn chờ. **Không sang M7.**
+1. Nếu trang chi tiết còn hiện lỗi, đối chiếu log an toàn mới (tên lỗi/Zod path/code/message; không gửi giá trị response) để xác định phần runtime khác với payload mô tả.
+2. Chỉ sửa schema/repository khi diagnostic chỉ ra mismatch thực tế; giữ validation chặt và thêm regression test cho payload gây lỗi.
+3. M6 vẫn chờ người dùng đọc migration, tự `supabase db push` và chạy checklist mục 5.3; **không sang M7**.
 
 ### 3.1. Hai file agent trước để dở và cách xử lý
 
@@ -249,6 +250,7 @@ E2E:             npx playwright test     # chưa cài; M9
 | 2026-10-11 | Copilot | M6 CI follow-up: run #73 xác nhận A22 chỉ có `diag()` nên thiếu 1 TAP; thêm kiểm tra quota không tạo quán thứ 6, giữ `plan(52)`, sửa raw diagnostic xử lý khoảng trắng. Đã rà các subquery/DO/PERFORM và ghi bằng chứng tại `SECURITY-TESTS.md`. Run #74 xác nhận `Files=10, Tests=192`, raw TAP `01` 52/52 và `10` 63/63; cả database lẫn lint/type-check/test/build xanh. | `482d7b4`, `37be5fc` |
 | 2026-10-11 | Copilot | Map style follow-up: cả hai `<Map>` dùng `onError`, chỉ log chuỗi cố định và hiển thị lỗi thân thiện i18n; không đọc hay ghi log error object/style URL. | `5b385af` |
 | 2026-10-11 | Copilot | Mở rộng push trigger CI cho nhánh tiếp quản sau khi xác nhận nhánh không được bao phủ trước đó; push và run #74 đã thành công. | `37be5fc` |
+| 2026-10-12 | Copilot | Kiểm tra lỗi trang chi tiết: schema/repository chấp nhận payload được mô tả; test tích hợp Supabase repository + component trong Strict Mode xác nhận UI hiển thị và không gửi request trùng. Thêm log Zod đã lọc path/code/message, test không lộ input. Chưa tái hiện lỗi với payload này; nếu còn, cần log diagnostic runtime để nhận diện giá trị/kiểu sai mà không gửi giá trị nhạy cảm. Local lint/tsc/test/build đều pass. | commit trong phiên này |
 
 ## 10. Những gì đã đổi về quyền hệ thống ở lượt trước (để đối chiếu, KHÔNG lặp lại)
 
